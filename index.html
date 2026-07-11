@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FotoExplain</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #1a1d24;
+    --accent: #4f9dff;
+    --text: #e8e9ec;
+    --muted: #9aa0ab;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 20px;
+  }
+  h1 {
+    font-size: 22px;
+    text-align: center;
+    margin-bottom: 20px;
+    font-weight: 600;
+  }
+  .upload-box {
+    background: var(--card);
+    border: 2px dashed #333844;
+    border-radius: 16px;
+    padding: 30px 20px;
+    text-align: center;
+    margin-bottom: 20px;
+  }
+  input[type="file"] { display: none; }
+  .btn {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    padding: 12px 24px;
+    border-radius: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    font-size: 16px;
+    margin: 6px;
+  }
+  .btn:active { opacity: 0.8; }
+  #preview {
+    width: 100%;
+    border-radius: 14px;
+    margin-top: 16px;
+    display: none;
+  }
+  .card {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 18px;
+    margin-top: 16px;
+    display: none;
+  }
+  .tag {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+  }
+  .desc { line-height: 1.5; margin-bottom: 12px; }
+  .wiki-box {
+    border-top: 1px solid #333844;
+    padding-top: 12px;
+    margin-top: 12px;
+  }
+  .wiki-box img {
+    width: 100%;
+    border-radius: 10px;
+    margin-bottom: 10px;
+  }
+  .wiki-title { font-weight: 600; margin-bottom: 6px; }
+  .wiki-link {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 14px;
+  }
+  .loading {
+    text-align: center;
+    color: var(--muted);
+    padding: 20px;
+    display: none;
+  }
+  .muted { color: var(--muted); font-size: 14px; }
+  .hist-item {
+    display: flex;
+    gap: 12px;
+    background: var(--card);
+    border-radius: 12px;
+    padding: 10px;
+    margin-bottom: 10px;
+    align-items: center;
+  }
+  .hist-item img {
+    width: 60px;
+    height: 60px;
+    object-fit: cover;
+    border-radius: 8px;
+    flex-shrink: 0;
+  }
+  .hist-info { flex: 1; min-width: 0; }
+  .hist-cat {
+    font-size: 11px;
+    color: var(--accent);
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .hist-desc {
+    font-size: 13px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .hist-date { font-size: 11px; color: var(--muted); margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<h1>📸 FotoExplain</h1>
+
+<div class="upload-box">
+  <p class="muted">Scatta o scegli una foto: monumenti, architettura, fiori, animali</p>
+  <label class="btn" for="cameraInput">Scatta foto</label>
+  <input type="file" id="cameraInput" accept="image/*" capture="environment">
+  <label class="btn" for="libraryInput" style="background:#333844;">Da libreria</label>
+  <input type="file" id="libraryInput" accept="image/*">
+  <img id="preview" alt="anteprima">
+</div>
+
+<div style="text-align:center; margin-bottom: 16px;">
+  <button class="btn" id="toggleHistoryBtn" style="background:#333844;">📜 Cronologia</button>
+</div>
+
+<div id="historyList" style="display:none;"></div>
+
+<div class="loading" id="loading">Analisi in corso…</div>
+
+<div class="card" id="resultCard">
+  <span class="tag" id="categoria"></span>
+  <p class="desc" id="descrizione"></p>
+  <div class="wiki-box" id="wikiBox" style="display:none;">
+    <img id="wikiImg" style="display:none;">
+    <div class="wiki-title" id="wikiTitle"></div>
+    <p class="desc" id="wikiExtract"></p>
+    <a class="wiki-link" id="wikiLink" href="#" target="_blank">Leggi su Wikipedia →</a>
+  </div>
+</div>
+
+<script>
+const WORKER_URL = "https://foto-explain-proxy.paolo-rec.workers.dev";
+const JSONBIN_URL = "https://api.jsonbin.io/v3/b/IL_TUO_BIN_ID";
+const JSONBIN_KEY = "LA_TUA_X_MASTER_KEY";
+
+const cameraInput = document.getElementById('cameraInput');
+const libraryInput = document.getElementById('libraryInput');
+const preview = document.getElementById('preview');
+const loading = document.getElementById('loading');
+const resultCard = document.getElementById('resultCard');
+const historyList = document.getElementById('historyList');
+const toggleHistoryBtn = document.getElementById('toggleHistoryBtn');
+
+cameraInput.addEventListener('change', handleFile);
+libraryInput.addEventListener('change', handleFile);
+
+let historyVisible = false;
+toggleHistoryBtn.addEventListener('click', async () => {
+  historyVisible = !historyVisible;
+  historyList.style.display = historyVisible ? 'block' : 'none';
+  if (historyVisible) {
+    historyList.innerHTML = '<p class="muted" style="text-align:center;">Caricamento…</p>';
+    const cronologia = await loadHistory();
+    renderHistory(cronologia);
+  }
+});
+
+async function handleFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  resultCard.style.display = 'none';
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
+  loading.style.display = 'block';
+
+  try {
+    const { base64, mediaType } = await resizeAndEncode(file);
+    const result = await analyzeImage(base64, mediaType);
+    renderResult(result);
+
+    let wikiInfo = null;
+    if (result.nome_probabile) {
+      wikiInfo = await fetchWikipedia(result.nome_probabile);
+    }
+
+    const thumb = await resizeAndEncode(file, 200, 0.6);
+    saveHistoryEntry({
+      thumb: `data:image/jpeg;base64,${thumb.base64}`,
+      categoria: result.categoria,
+      descrizione: result.descrizione,
+      wikiTitle: wikiInfo?.title || null,
+      wikiLink: wikiInfo?.link || null,
+      data: new Date().toISOString()
+    });
+  } catch (err) {
+    document.getElementById('categoria').textContent = 'errore';
+    document.getElementById('descrizione').textContent = 'Errore: ' + err.message;
+    resultCard.style.display = 'block';
+  } finally {
+    loading.style.display = 'none';
+  }
+}
+
+function resizeAndEncode(file, maxDim = 1280, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = (e) => { img.src = e.target.result; };
+    reader.onerror = reject;
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > height && width > maxDim) {
+        height = height * (maxDim / width);
+        width = maxDim;
+      } else if (height > maxDim) {
+        width = width * (maxDim / height);
+        height = maxDim;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      const dataUrl = canvas.toDataURL('image/jpeg', quality);
+      resolve({ base64: dataUrl.split(',')[1], mediaType: 'image/jpeg' });
+    };
+    img.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function analyzeImage(base64, mediaType) {
+  const res = await fetch(WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ imageBase64: base64, mediaType })
+  });
+  if (!res.ok) throw new Error('Richiesta fallita');
+  return res.json();
+}
+
+function renderResult(result) {
+  document.getElementById('categoria').textContent = result.categoria || 'altro';
+  document.getElementById('descrizione').textContent = result.descrizione || '';
+  document.getElementById('wikiBox').style.display = 'none';
+  resultCard.style.display = 'block';
+}
+
+async function fetchWikipedia(nome) {
+  try {
+    const searchUrl = `https://it.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(nome)}&limit=1&format=json&origin=*`;
+    const searchRes = await fetch(searchUrl);
+    const searchData = await searchRes.json();
+    const titolo = searchData[1]?.[0];
+    if (!titolo) return null;
+
+    const summaryUrl = `https://it.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(titolo)}`;
+    const summaryRes = await fetch(summaryUrl);
+    if (!summaryRes.ok) return null;
+    const summaryData = await summaryRes.json();
+
+    const link = summaryData.content_urls?.desktop?.page || `https://it.wikipedia.org/wiki/${titolo}`;
+
+    document.getElementById('wikiTitle').textContent = summaryData.title || titolo;
+    document.getElementById('wikiExtract').textContent = summaryData.extract || '';
+    document.getElementById('wikiLink').href = link;
+
+    const wikiImg = document.getElementById('wikiImg');
+    if (summaryData.thumbnail?.source) {
+      wikiImg.src = summaryData.thumbnail.source;
+      wikiImg.style.display = 'block';
+    } else {
+      wikiImg.style.display = 'none';
+    }
+
+    document.getElementById('wikiBox').style.display = 'block';
+
+    return { title: summaryData.title || titolo, link };
+  } catch (err) {
+    return null;
+  }
+}
+
+async function loadHistory() {
+  try {
+    const res = await fetch(`${JSONBIN_URL}/latest`, {
+      headers: { 'X-Master-Key': JSONBIN_KEY }
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.record?.cronologia || [];
+  } catch (err) {
+    return [];
+  }
+}
+
+async function saveHistoryEntry(entry) {
+  try {
+    const cronologia = await loadHistory();
+    cronologia.unshift(entry);
+    const trimmed = cronologia.slice(0, 50);
+    await fetch(JSONBIN_URL, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Master-Key': JSONBIN_KEY
+      },
+      body: JSON.stringify({ cronologia: trimmed })
+    });
+  } catch (err) {
+  }
+}
+
+function renderHistory(cronologia) {
+  if (!cronologia.length) {
+    historyList.innerHTML = '<p class="muted" style="text-align:center;">Nessuna foto ancora analizzata</p>';
+    return;
+  }
+  historyList.innerHTML = cronologia.map(item => {
+    const data = new Date(item.data).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return `
+      <div class="hist-item">
+        <img src="${item.thumb}" alt="miniatura">
+        <div class="hist-info">
+          <div class="hist-cat">${item.categoria || 'altro'}</div>
+          <div class="hist-desc">${item.descrizione || ''}</div>
+          <div class="hist-date">${data}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+</script>
+
+</body>
+</html>
