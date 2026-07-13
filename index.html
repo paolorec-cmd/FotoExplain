@@ -11,6 +11,7 @@
     --accent: #4f9dff;
     --text: #e8e9ec;
     --muted: #9aa0ab;
+    --danger: #ff5c5c;
   }
   * { box-sizing: border-box; }
   body {
@@ -49,7 +50,31 @@
     margin: 6px;
   }
   .btn:active { opacity: 0.8; }
-  #preview {
+  .btn.secondary { background: #333844; }
+  .btn.danger { background: var(--danger); }
+  .btn.small {
+    padding: 8px 14px;
+    font-size: 13px;
+    margin: 4px;
+  }
+  select, .text-input {
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid #333844;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 14px;
+    margin: 6px;
+    width: calc(100% - 12px);
+  }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 4px;
+    margin-bottom: 12px;
+  }
+  #preview, .preview-secondary {
     width: 100%;
     border-radius: 14px;
     margin-top: 16px;
@@ -72,7 +97,9 @@
     margin-bottom: 10px;
     text-transform: uppercase;
   }
-  .desc { line-height: 1.5; margin-bottom: 12px; }
+  .desc { line-height: 1.5; margin-bottom: 12px; white-space: pre-wrap; }
+  .sci-name { font-style: italic; color: var(--muted); margin-bottom: 10px; font-size: 14px; }
+  .loc-tag { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
   .wiki-box {
     border-top: 1px solid #333844;
     padding-top: 12px;
@@ -129,32 +156,175 @@
     -webkit-box-orient: vertical;
   }
   .hist-date { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .hist-del {
+    background: none;
+    border: none;
+    color: var(--danger);
+    font-size: 20px;
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 4px 8px;
+  }
+  .batch-item {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    background: var(--card);
+    border-radius: 10px;
+    padding: 8px;
+    margin-bottom: 8px;
+  }
+  .batch-item img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; }
+  .batch-status { font-size: 12px; color: var(--muted); }
+
+  #lockScreen {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    z-index: 999;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    text-align: center;
+  }
+  #lockScreen h2 { font-size: 20px; margin-bottom: 6px; }
+  #lockScreen .muted { margin-bottom: 20px; }
+  #lockScreen .text-input {
+    max-width: 280px;
+    text-align: center;
+    font-size: 16px;
+  }
+  #lockScreen .btn { max-width: 280px; width: 100%; }
+  #lockError { color: var(--danger); font-size: 13px; min-height: 18px; margin-top: 6px; }
+  #settingsPanel {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 998;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  #settingsPanel .card {
+    display: block;
+    max-width: 340px;
+    width: 100%;
+  }
 </style>
 </head>
 <body>
 
-<h1>📸 FotoExplain</h1>
+<!-- Schermo di blocco -->
+<div id="lockScreen">
+  <div id="lockSetupView">
+    <h2>🔒 Proteggi FotoExplain</h2>
+    <p class="muted">Imposta una password per questo dispositivo</p>
+    <input type="password" class="text-input" id="setupPwd1" placeholder="Nuova password">
+    <input type="password" class="text-input" id="setupPwd2" placeholder="Ripeti password">
+    <div id="setupError" style="color:#ff5c5c; font-size:13px; min-height:18px; margin:6px 0;"></div>
+    <button class="btn" id="setupSaveBtn">Salva password</button>
+    <p class="muted" style="margin-top:14px;"><button class="btn secondary small" id="skipLockBtn">Salta (nessun blocco)</button></p>
+  </div>
+  <div id="lockUnlockView" style="display:none;">
+    <h2>🔒 FotoExplain bloccato</h2>
+    <p class="muted">Inserisci la password per continuare</p>
+    <input type="password" class="text-input" id="unlockPwdInput" placeholder="Password">
+    <div id="lockError"></div>
+    <button class="btn" id="unlockBtn">Sblocca</button>
+    <div id="biometricArea" style="margin-top:10px; display:none;">
+      <button class="btn secondary" id="biometricUnlockBtn">👆 Sblocca con Face ID / Touch ID</button>
+    </div>
+  </div>
+</div>
 
-<div class="upload-box">
+<!-- Pannello impostazioni sicurezza -->
+<div id="settingsPanel">
+  <div class="card">
+    <h2 style="margin-top:0;">🔐 Sicurezza</h2>
+    <button class="btn secondary" id="changePwdBtn" style="width:100%;">Cambia password</button>
+    <button class="btn secondary" id="enableBiometricBtn" style="width:100%;">👆 Abilita Face ID / Touch ID</button>
+    <button class="btn secondary" id="disableLockBtn" style="width:100%; background:#ff5c5c;">Disattiva blocco</button>
+    <button class="btn secondary" id="closeSettingsBtn" style="width:100%;">Chiudi</button>
+  </div>
+</div>
+
+<h1>📸 FotoExplain <button class="btn small secondary" id="openSettingsBtn" style="float:right;">🔐</button></h1>
+
+<div class="controls-row">
+  <select id="modeSelect">
+    <option value="standard">🔍 Analisi standard</option>
+    <option value="scientifico">🔬 Analisi scientifica (nome specie)</option>
+    <option value="testo">📝 Leggi e traduci testo</option>
+    <option value="confronto">⚖️ Confronta due foto</option>
+    <option value="batch">📚 Analisi multipla (batch)</option>
+  </select>
+  <select id="langSelect">
+    <option value="it">🇮🇹 Italiano</option>
+    <option value="en">🇬🇧 English</option>
+    <option value="fr">🇫🇷 Français</option>
+    <option value="es">🇪🇸 Español</option>
+    <option value="de">🇩🇪 Deutsch</option>
+    <option value="ar">🇸🇦 العربية</option>
+  </select>
+  <button class="btn small secondary" id="locBtn">📍 Posizione: off</button>
+</div>
+
+<div class="upload-box" id="standardUpload">
   <p class="muted">Scatta o scegli una foto: monumenti, architettura, fiori, animali</p>
   <label class="btn" for="cameraInput">Scatta foto</label>
   <input type="file" id="cameraInput" accept="image/*" capture="environment">
-  <label class="btn" for="libraryInput" style="background:#333844;">Da libreria</label>
+  <label class="btn secondary" for="libraryInput">Da libreria</label>
   <input type="file" id="libraryInput" accept="image/*">
   <img id="preview" alt="anteprima">
 </div>
 
-<div style="text-align:center; margin-bottom: 16px;">
-  <button class="btn" id="toggleHistoryBtn" style="background:#333844;">📜 Cronologia</button>
+<div class="upload-box" id="confrontoUpload" style="display:none;">
+  <p class="muted">Scegli due foto da confrontare</p>
+  <label class="btn" for="compareInput1">Foto 1</label>
+  <input type="file" id="compareInput1" accept="image/*">
+  <label class="btn secondary" for="compareInput2">Foto 2</label>
+  <input type="file" id="compareInput2" accept="image/*">
+  <img id="previewCompare1" class="preview-secondary" alt="anteprima 1">
+  <img id="previewCompare2" class="preview-secondary" alt="anteprima 2">
+  <div style="text-align:center; margin-top:10px;">
+    <button class="btn" id="runCompareBtn">Confronta</button>
+  </div>
 </div>
 
-<div id="historyList" style="display:none;"></div>
+<div class="upload-box" id="batchUpload" style="display:none;">
+  <p class="muted">Scegli più foto da analizzare in sequenza</p>
+  <label class="btn" for="batchInput">Scegli foto multiple</label>
+  <input type="file" id="batchInput" accept="image/*" multiple>
+  <div id="batchList" style="margin-top:14px; text-align:left;"></div>
+</div>
+
+<div style="text-align:center; margin-bottom: 16px;">
+  <button class="btn secondary" id="toggleHistoryBtn">📜 Cronologia</button>
+</div>
+
+<div id="historyList" style="display:none;">
+  <input type="text" class="text-input" id="historySearch" placeholder="Cerca nella cronologia…">
+  <div style="text-align:center; margin-bottom: 10px;">
+    <button class="btn small secondary" id="exportCsvBtn">⬇️ Esporta CSV</button>
+  </div>
+  <div id="historyItems"></div>
+</div>
 
 <div class="loading" id="loading">Analisi in corso…</div>
 
 <div class="card" id="resultCard">
   <span class="tag" id="categoria"></span>
+  <div class="loc-tag" id="locTag" style="display:none;"></div>
+  <div class="sci-name" id="nomeScientifico" style="display:none;"></div>
   <p class="desc" id="descrizione"></p>
+  <div>
+    <button class="btn small secondary" id="copyBtn">📋 Copia</button>
+    <button class="btn small secondary" id="shareBtn">📤 Condividi</button>
+    <button class="btn small secondary" id="speakBtn">🔊 Ascolta</button>
+  </div>
   <div class="wiki-box" id="wikiBox" style="display:none;">
     <img id="wikiImg" style="display:none;">
     <div class="wiki-title" id="wikiTitle"></div>
@@ -174,21 +344,74 @@ const preview = document.getElementById('preview');
 const loading = document.getElementById('loading');
 const resultCard = document.getElementById('resultCard');
 const historyList = document.getElementById('historyList');
+const historyItems = document.getElementById('historyItems');
 const toggleHistoryBtn = document.getElementById('toggleHistoryBtn');
+const modeSelect = document.getElementById('modeSelect');
+const langSelect = document.getElementById('langSelect');
+const locBtn = document.getElementById('locBtn');
+const historySearch = document.getElementById('historySearch');
+const exportCsvBtn = document.getElementById('exportCsvBtn');
+const copyBtn = document.getElementById('copyBtn');
+const shareBtn = document.getElementById('shareBtn');
 
-cameraInput.addEventListener('change', handleFile);
-libraryInput.addEventListener('change', handleFile);
+let currentLocation = null; // { lat, lon, label }
+let locationEnabled = false;
+let lastResultText = '';
+let lastResultImageDataUrl = null;
+let fullHistoryCache = [];
 
-let historyVisible = false;
-toggleHistoryBtn.addEventListener('click', async () => {
-  historyVisible = !historyVisible;
-  historyList.style.display = historyVisible ? 'block' : 'none';
-  if (historyVisible) {
-    historyList.innerHTML = '<p class="muted" style="text-align:center;">Caricamento…</p>';
-    const cronologia = await loadHistory();
-    renderHistory(cronologia);
+// ---------- Mode switching ----------
+const uploadBoxes = {
+  standard: document.getElementById('standardUpload'),
+  scientifico: document.getElementById('standardUpload'),
+  testo: document.getElementById('standardUpload'),
+  confronto: document.getElementById('confrontoUpload'),
+  batch: document.getElementById('batchUpload'),
+};
+modeSelect.addEventListener('change', () => {
+  Object.values(uploadBoxes).forEach(el => el.style.display = 'none');
+  const box = uploadBoxes[modeSelect.value];
+  if (box) box.style.display = 'block';
+  resultCard.style.display = 'none';
+});
+
+// ---------- Geolocation ----------
+locBtn.addEventListener('click', async () => {
+  if (locationEnabled) {
+    locationEnabled = false;
+    currentLocation = null;
+    locBtn.textContent = '📍 Posizione: off';
+    return;
+  }
+  locBtn.textContent = '📍 Rilevamento…';
+  try {
+    const pos = await new Promise((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 })
+    );
+    const lat = pos.coords.latitude;
+    const lon = pos.coords.longitude;
+    let label = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+    try {
+      const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`, {
+        headers: { 'Accept-Language': langSelect.value }
+      });
+      if (geoRes.ok) {
+        const geoData = await geoRes.json();
+        if (geoData.display_name) label = geoData.display_name;
+      }
+    } catch (e) {}
+    currentLocation = { lat, lon, label };
+    locationEnabled = true;
+    locBtn.textContent = '📍 Posizione: on';
+  } catch (err) {
+    locBtn.textContent = '📍 Posizione: off';
+    alert('Impossibile ottenere la posizione.');
   }
 });
+
+// ---------- Standard / scientific / text modes ----------
+cameraInput.addEventListener('change', handleFile);
+libraryInput.addEventListener('change', handleFile);
 
 async function handleFile(e) {
   const file = e.target.files[0];
@@ -201,7 +424,8 @@ async function handleFile(e) {
 
   try {
     const { base64, mediaType } = await resizeAndEncode(file);
-    const result = await analyzeImage(base64, mediaType);
+    lastResultImageDataUrl = `data:${mediaType};base64,${base64}`;
+    const result = await analyzeImage(base64, mediaType, modeSelect.value);
     renderResult(result);
 
     let wikiInfo = null;
@@ -214,6 +438,7 @@ async function handleFile(e) {
       thumb: `data:image/jpeg;base64,${thumb.base64}`,
       categoria: result.categoria,
       descrizione: result.descrizione,
+      nomeScientifico: result.nome_scientifico || null,
       wikiTitle: wikiInfo?.title || null,
       wikiLink: wikiInfo?.link || null,
       data: new Date().toISOString()
@@ -227,6 +452,95 @@ async function handleFile(e) {
   }
 }
 
+// ---------- Compare mode ----------
+const compareInput1 = document.getElementById('compareInput1');
+const compareInput2 = document.getElementById('compareInput2');
+const previewCompare1 = document.getElementById('previewCompare1');
+const previewCompare2 = document.getElementById('previewCompare2');
+let compareFile1 = null, compareFile2 = null;
+
+compareInput1.addEventListener('change', e => {
+  compareFile1 = e.target.files[0];
+  if (compareFile1) {
+    previewCompare1.src = URL.createObjectURL(compareFile1);
+    previewCompare1.style.display = 'block';
+  }
+});
+compareInput2.addEventListener('change', e => {
+  compareFile2 = e.target.files[0];
+  if (compareFile2) {
+    previewCompare2.src = URL.createObjectURL(compareFile2);
+    previewCompare2.style.display = 'block';
+  }
+});
+
+document.getElementById('runCompareBtn').addEventListener('click', async () => {
+  if (!compareFile1 || !compareFile2) {
+    alert('Scegli entrambe le foto prima di confrontare.');
+    return;
+  }
+  resultCard.style.display = 'none';
+  loading.style.display = 'block';
+  try {
+    const img1 = await resizeAndEncode(compareFile1);
+    const img2 = await resizeAndEncode(compareFile2);
+    const result = await analyzeCompare(img1, img2);
+    renderResult(result);
+  } catch (err) {
+    document.getElementById('categoria').textContent = 'errore';
+    document.getElementById('descrizione').textContent = 'Errore: ' + err.message;
+    resultCard.style.display = 'block';
+  } finally {
+    loading.style.display = 'none';
+  }
+});
+
+// ---------- Batch mode ----------
+const batchInput = document.getElementById('batchInput');
+const batchList = document.getElementById('batchList');
+
+batchInput.addEventListener('change', async (e) => {
+  const files = Array.from(e.target.files);
+  if (!files.length) return;
+  batchList.innerHTML = '';
+
+  files.forEach((file, i) => {
+    const row = document.createElement('div');
+    row.className = 'batch-item';
+    const thumbUrl = URL.createObjectURL(file);
+    row.innerHTML = `<img src="${thumbUrl}"><div><div class="batch-status" id="batchStatus${i}">In attesa…</div></div>`;
+    batchList.appendChild(row);
+  });
+
+  for (let i = 0; i < files.length; i++) {
+    const statusEl = document.getElementById(`batchStatus${i}`);
+    statusEl.textContent = 'Analisi in corso…';
+    try {
+      const { base64, mediaType } = await resizeAndEncode(files[i]);
+      const result = await analyzeImage(base64, mediaType, 'standard');
+      statusEl.textContent = `${result.categoria || 'ok'}: ${(result.descrizione || '').slice(0, 80)}…`;
+
+      let wikiInfo = null;
+      if (result.nome_probabile) {
+        wikiInfo = await fetchWikipedia(result.nome_probabile);
+      }
+      const thumb = await resizeAndEncode(files[i], 200, 0.6);
+      await saveHistoryEntry({
+        thumb: `data:image/jpeg;base64,${thumb.base64}`,
+        categoria: result.categoria,
+        descrizione: result.descrizione,
+        nomeScientifico: result.nome_scientifico || null,
+        wikiTitle: wikiInfo?.title || null,
+        wikiLink: wikiInfo?.link || null,
+        data: new Date().toISOString()
+      });
+    } catch (err) {
+      statusEl.textContent = 'Errore: ' + err.message;
+    }
+  }
+});
+
+// ---------- Helpers ----------
 function resizeAndEncode(file, maxDim = 1280, quality = 0.85) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -254,11 +568,34 @@ function resizeAndEncode(file, maxDim = 1280, quality = 0.85) {
   });
 }
 
-async function analyzeImage(base64, mediaType) {
+async function analyzeImage(base64, mediaType, mode) {
   const res = await fetch(WORKER_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ imageBase64: base64, mediaType })
+    body: JSON.stringify({
+      imageBase64: base64,
+      mediaType,
+      modalita: mode,
+      lingua: langSelect.value,
+      posizione: locationEnabled && currentLocation ? currentLocation.label : null
+    })
+  });
+  if (!res.ok) throw new Error('Richiesta fallita');
+  return res.json();
+}
+
+async function analyzeCompare(img1, img2) {
+  const res = await fetch(WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      modalita: 'confronto',
+      lingua: langSelect.value,
+      imageBase64: img1.base64,
+      mediaType: img1.mediaType,
+      imageBase64_2: img2.base64,
+      mediaType_2: img2.mediaType
+    })
   });
   if (!res.ok) throw new Error('Richiesta fallita');
   return res.json();
@@ -268,23 +605,105 @@ function renderResult(result) {
   document.getElementById('categoria').textContent = result.categoria || 'altro';
   document.getElementById('descrizione').textContent = result.descrizione || '';
   document.getElementById('wikiBox').style.display = 'none';
+
+  const sciEl = document.getElementById('nomeScientifico');
+  if (result.nome_scientifico) {
+    sciEl.textContent = result.nome_scientifico;
+    sciEl.style.display = 'block';
+  } else {
+    sciEl.style.display = 'none';
+  }
+
+  const locEl = document.getElementById('locTag');
+  if (locationEnabled && currentLocation) {
+    locEl.textContent = `📍 ${currentLocation.label}`;
+    locEl.style.display = 'block';
+  } else {
+    locEl.style.display = 'none';
+  }
+
+  lastResultText = `${result.categoria || ''}\n${result.descrizione || ''}`;
   resultCard.style.display = 'block';
 }
 
+copyBtn.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(lastResultText);
+    copyBtn.textContent = '✅ Copiato';
+    setTimeout(() => copyBtn.textContent = '📋 Copia', 1500);
+  } catch (err) {
+    alert('Impossibile copiare automaticamente. Testo:\n\n' + lastResultText);
+  }
+});
+
+shareBtn.addEventListener('click', async () => {
+  try {
+    if (navigator.share) {
+      const shareData = { title: 'FotoExplain', text: lastResultText };
+      if (lastResultImageDataUrl && navigator.canShare) {
+        const blob = await (await fetch(lastResultImageDataUrl)).blob();
+        const file = new File([blob], 'foto.jpg', { type: blob.type });
+        if (navigator.canShare({ files: [file] })) {
+          shareData.files = [file];
+        }
+      }
+      await navigator.share(shareData);
+    } else {
+      await navigator.clipboard.writeText(lastResultText);
+      alert('Condivisione non supportata: testo copiato negli appunti.');
+    }
+  } catch (err) {}
+});
+
+const speakBtn = document.getElementById('speakBtn');
+const voiceLangMap = { it: 'it-IT', en: 'en-US', fr: 'fr-FR', es: 'es-ES', de: 'de-DE', ar: 'ar-SA' };
+let isSpeaking = false;
+
+speakBtn.addEventListener('click', () => {
+  if (!('speechSynthesis' in window)) {
+    alert('Lettura vocale non supportata su questo browser.');
+    return;
+  }
+  if (isSpeaking) {
+    window.speechSynthesis.cancel();
+    isSpeaking = false;
+    speakBtn.textContent = '🔊 Ascolta';
+    return;
+  }
+  const textToSpeak = document.getElementById('descrizione').textContent;
+  if (!textToSpeak) return;
+  const utterance = new SpeechSynthesisUtterance(textToSpeak);
+  utterance.lang = voiceLangMap[langSelect.value] || 'it-IT';
+  utterance.onend = () => {
+    isSpeaking = false;
+    speakBtn.textContent = '🔊 Ascolta';
+  };
+  utterance.onerror = () => {
+    isSpeaking = false;
+    speakBtn.textContent = '🔊 Ascolta';
+  };
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utterance);
+  isSpeaking = true;
+  speakBtn.textContent = '⏹️ Ferma';
+});
+
 async function fetchWikipedia(nome) {
   try {
-    const searchUrl = `https://it.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(nome)}&limit=1&format=json&origin=*`;
+    const wikiLangMap = { it: 'it', en: 'en', fr: 'fr', es: 'es', de: 'de', ar: 'ar' };
+    const wikiLang = wikiLangMap[langSelect.value] || 'it';
+    const searchUrl = `https://${wikiLang}.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(nome)}&limit=1&format=json&origin=*`;
     const searchRes = await fetch(searchUrl);
     const searchData = await searchRes.json();
     const titolo = searchData[1]?.[0];
     if (!titolo) return null;
 
-    const summaryUrl = `https://it.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(titolo)}`;
+    const summaryUrl = `https://${wikiLang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(titolo)}`;
     const summaryRes = await fetch(summaryUrl);
     if (!summaryRes.ok) return null;
     const summaryData = await summaryRes.json();
 
-    const link = summaryData.content_urls?.desktop?.page || `https://it.wikipedia.org/wiki/${titolo}`;
+    const link = summaryData.content_urls?.desktop?.page || `https://${wikiLang}.wikipedia.org/wiki/${titolo}`;
 
     document.getElementById('wikiTitle').textContent = summaryData.title || titolo;
     document.getElementById('wikiExtract').textContent = summaryData.extract || '';
@@ -306,6 +725,29 @@ async function fetchWikipedia(nome) {
   }
 }
 
+// ---------- History ----------
+let historyVisible = false;
+toggleHistoryBtn.addEventListener('click', async () => {
+  historyVisible = !historyVisible;
+  historyList.style.display = historyVisible ? 'block' : 'none';
+  if (historyVisible) {
+    historyItems.innerHTML = '<p class="muted" style="text-align:center;">Caricamento…</p>';
+    fullHistoryCache = await loadHistory();
+    renderHistory(fullHistoryCache);
+  }
+});
+
+historySearch.addEventListener('input', () => {
+  const q = historySearch.value.trim().toLowerCase();
+  if (!q) { renderHistory(fullHistoryCache); return; }
+  const filtered = fullHistoryCache.filter(item =>
+    (item.categoria || '').toLowerCase().includes(q) ||
+    (item.descrizione || '').toLowerCase().includes(q) ||
+    (item.nomeScientifico || '').toLowerCase().includes(q)
+  );
+  renderHistory(filtered);
+});
+
 async function loadHistory() {
   try {
     const res = await fetch(`${JSONBIN_URL}/latest`, {
@@ -319,29 +761,39 @@ async function loadHistory() {
   }
 }
 
+async function saveFullHistory(cronologia) {
+  await fetch(JSONBIN_URL, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Master-Key': JSONBIN_KEY
+    },
+    body: JSON.stringify({ cronologia })
+  });
+}
+
 async function saveHistoryEntry(entry) {
   try {
     const cronologia = await loadHistory();
     cronologia.unshift(entry);
     const trimmed = cronologia.slice(0, 50);
-    await fetch(JSONBIN_URL, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Master-Key': JSONBIN_KEY
-      },
-      body: JSON.stringify({ cronologia: trimmed })
-    });
+    await saveFullHistory(trimmed);
   } catch (err) {
   }
 }
 
+async function deleteHistoryEntry(index) {
+  fullHistoryCache.splice(index, 1);
+  renderHistory(fullHistoryCache);
+  await saveFullHistory(fullHistoryCache);
+}
+
 function renderHistory(cronologia) {
   if (!cronologia.length) {
-    historyList.innerHTML = '<p class="muted" style="text-align:center;">Nessuna foto ancora analizzata</p>';
+    historyItems.innerHTML = '<p class="muted" style="text-align:center;">Nessuna foto ancora analizzata</p>';
     return;
   }
-  historyList.innerHTML = cronologia.map(item => {
+  historyItems.innerHTML = cronologia.map((item, idx) => {
     const data = new Date(item.data).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     return `
       <div class="hist-item">
@@ -351,12 +803,188 @@ function renderHistory(cronologia) {
           <div class="hist-desc">${item.descrizione || ''}</div>
           <div class="hist-date">${data}</div>
         </div>
+        <button class="hist-del" data-idx="${idx}" title="Elimina">🗑️</button>
       </div>
     `;
   }).join('');
+
+  historyItems.querySelectorAll('.hist-del').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const realIdx = fullHistoryCache.indexOf(cronologia[parseInt(btn.dataset.idx)]);
+      if (realIdx > -1) deleteHistoryEntry(realIdx);
+    });
+  });
 }
+
+exportCsvBtn.addEventListener('click', () => {
+  if (!fullHistoryCache.length) { alert('Nessuna voce da esportare.'); return; }
+  const header = 'Data,Categoria,Descrizione,Nome scientifico\n';
+  const rows = fullHistoryCache.map(item => {
+    const clean = s => `"${(s || '').replace(/"/g, '""')}"`;
+    return [item.data, clean(item.categoria), clean(item.descrizione), clean(item.nomeScientifico)].join(',');
+  }).join('\n');
+  const csv = header + rows;
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `fotoexplain_cronologia_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+// ---------- Blocco con password + Face ID / Touch ID ----------
+const PWD_HASH_KEY = 'fe_pwd_hash';
+const LOCK_ENABLED_KEY = 'fe_lock_enabled';
+const WEBAUTHN_ID_KEY = 'fe_webauthn_credential_id';
+
+const lockScreen = document.getElementById('lockScreen');
+const lockSetupView = document.getElementById('lockSetupView');
+const lockUnlockView = document.getElementById('lockUnlockView');
+const settingsPanel = document.getElementById('settingsPanel');
+
+async function sha256Hex(text) {
+  const enc = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest('SHA-256', enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function bufToBase64(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)));
+}
+function base64ToBuf(b64) {
+  return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+}
+
+function initLockScreen() {
+  const lockEnabled = localStorage.getItem(LOCK_ENABLED_KEY) === '1';
+  if (!lockEnabled) {
+    lockScreen.style.display = 'none';
+    return;
+  }
+  lockScreen.style.display = 'flex';
+  lockSetupView.style.display = 'none';
+  lockUnlockView.style.display = 'block';
+  const hasBiometric = !!localStorage.getItem(WEBAUTHN_ID_KEY);
+  document.getElementById('biometricArea').style.display = hasBiometric ? 'block' : 'none';
+  if (hasBiometric && window.PublicKeyCredential) {
+    // tenta subito lo sblocco biometrico automatico
+    tryBiometricUnlock(true);
+  }
+}
+
+// Se non è mai stata impostata una password, mostra la schermata iniziale la prima volta
+if (localStorage.getItem(PWD_HASH_KEY)) {
+  initLockScreen();
+} else {
+  lockScreen.style.display = 'flex';
+  lockSetupView.style.display = 'block';
+  lockUnlockView.style.display = 'none';
+}
+
+document.getElementById('skipLockBtn').addEventListener('click', () => {
+  localStorage.setItem(LOCK_ENABLED_KEY, '0');
+  lockScreen.style.display = 'none';
+});
+
+document.getElementById('setupSaveBtn').addEventListener('click', async () => {
+  const p1 = document.getElementById('setupPwd1').value;
+  const p2 = document.getElementById('setupPwd2').value;
+  const errEl = document.getElementById('setupError');
+  if (!p1 || p1.length < 4) { errEl.textContent = 'Almeno 4 caratteri.'; return; }
+  if (p1 !== p2) { errEl.textContent = 'Le password non coincidono.'; return; }
+  const hash = await sha256Hex(p1);
+  localStorage.setItem(PWD_HASH_KEY, hash);
+  localStorage.setItem(LOCK_ENABLED_KEY, '1');
+  lockScreen.style.display = 'none';
+});
+
+document.getElementById('unlockBtn').addEventListener('click', async () => {
+  const val = document.getElementById('unlockPwdInput').value;
+  const hash = await sha256Hex(val);
+  const stored = localStorage.getItem(PWD_HASH_KEY);
+  if (hash === stored) {
+    lockScreen.style.display = 'none';
+  } else {
+    document.getElementById('lockError').textContent = 'Password errata.';
+  }
+});
+
+document.getElementById('unlockPwdInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('unlockBtn').click();
+});
+
+async function tryBiometricUnlock(silent) {
+  try {
+    const credId = localStorage.getItem(WEBAUTHN_ID_KEY);
+    if (!credId) return;
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const cred = await navigator.credentials.get({
+      publicKey: {
+        challenge,
+        allowCredentials: [{ id: base64ToBuf(credId), type: 'public-key' }],
+        userVerification: 'required',
+        timeout: 30000
+      }
+    });
+    if (cred) lockScreen.style.display = 'none';
+  } catch (err) {
+    if (!silent) document.getElementById('lockError').textContent = 'Sblocco biometrico non riuscito.';
+  }
+}
+document.getElementById('biometricUnlockBtn').addEventListener('click', () => tryBiometricUnlock(false));
+
+// ---------- Pannello impostazioni ----------
+document.getElementById('openSettingsBtn').addEventListener('click', () => {
+  settingsPanel.style.display = 'flex';
+});
+document.getElementById('closeSettingsBtn').addEventListener('click', () => {
+  settingsPanel.style.display = 'none';
+});
+
+document.getElementById('changePwdBtn').addEventListener('click', async () => {
+  const newPwd = prompt('Nuova password (almeno 4 caratteri):');
+  if (!newPwd || newPwd.length < 4) return;
+  const hash = await sha256Hex(newPwd);
+  localStorage.setItem(PWD_HASH_KEY, hash);
+  localStorage.setItem(LOCK_ENABLED_KEY, '1');
+  alert('Password aggiornata.');
+});
+
+document.getElementById('disableLockBtn').addEventListener('click', () => {
+  if (!confirm('Disattivare il blocco con password?')) return;
+  localStorage.setItem(LOCK_ENABLED_KEY, '0');
+  settingsPanel.style.display = 'none';
+});
+
+document.getElementById('enableBiometricBtn').addEventListener('click', async () => {
+  if (!window.PublicKeyCredential) {
+    alert('Face ID / Touch ID non supportato su questo browser.');
+    return;
+  }
+  try {
+    const challenge = crypto.getRandomValues(new Uint8Array(32));
+    const userId = crypto.getRandomValues(new Uint8Array(16));
+    const cred = await navigator.credentials.create({
+      publicKey: {
+        challenge,
+        rp: { name: 'FotoExplain', id: location.hostname },
+        user: { id: userId, name: 'paolo', displayName: 'Paolo' },
+        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
+        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+        timeout: 30000,
+        attestation: 'none'
+      }
+    });
+    if (cred) {
+      localStorage.setItem(WEBAUTHN_ID_KEY, bufToBase64(cred.rawId));
+      alert('Face ID / Touch ID abilitato per questo dispositivo.');
+    }
+  } catch (err) {
+    alert('Impossibile abilitare: ' + err.message);
+  }
+});
 </script>
 
 </body>
 </html>
-
