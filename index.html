@@ -782,40 +782,55 @@ speakBtn.addEventListener('click', () => {
 });
 
 async function fetchWikipedia(nome) {
-  try {
-    const wikiLangMap = { it: 'it', en: 'en', fr: 'fr', es: 'es', de: 'de', ar: 'ar' };
-    const wikiLang = wikiLangMap[langSelect.value] || 'it';
-    const searchUrl = `https://${wikiLang}.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(nome)}&limit=1&format=json&origin=*`;
-    const searchRes = await fetch(searchUrl);
-    const searchData = await searchRes.json();
-    const titolo = searchData[1]?.[0];
-    if (!titolo) return null;
+  const wikiLangMap = { it: 'it', en: 'en', fr: 'fr', es: 'es', de: 'de', ar: 'ar' };
+  const wikiLang = wikiLangMap[langSelect.value] || 'it';
 
-    const summaryUrl = `https://${wikiLang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(titolo)}`;
-    const summaryRes = await fetch(summaryUrl);
-    if (!summaryRes.ok) return null;
-    const summaryData = await summaryRes.json();
+  const tentativo = async (termine) => {
+    try {
+      const searchUrl = `https://${wikiLang}.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(termine)}&limit=1&format=json&origin=*`;
+      const searchRes = await fetch(searchUrl);
+      const searchData = await searchRes.json();
+      const titolo = searchData[1]?.[0];
+      if (!titolo) return null;
 
-    const link = summaryData.content_urls?.desktop?.page || `https://${wikiLang}.wikipedia.org/wiki/${titolo}`;
+      const summaryUrl = `https://${wikiLang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(titolo)}`;
+      const summaryRes = await fetch(summaryUrl);
+      if (!summaryRes.ok) return null;
+      const summaryData = await summaryRes.json();
 
-    document.getElementById('wikiTitle').textContent = summaryData.title || titolo;
-    document.getElementById('wikiExtract').textContent = summaryData.extract || '';
-    document.getElementById('wikiLink').href = link;
+      const link = summaryData.content_urls?.desktop?.page || `https://${wikiLang}.wikipedia.org/wiki/${titolo}`;
 
-    const wikiImg = document.getElementById('wikiImg');
-    if (summaryData.thumbnail?.source) {
-      wikiImg.src = summaryData.thumbnail.source;
-      wikiImg.style.display = 'block';
-    } else {
-      wikiImg.style.display = 'none';
+      document.getElementById('wikiTitle').textContent = summaryData.title || titolo;
+      document.getElementById('wikiExtract').textContent = summaryData.extract || '';
+      document.getElementById('wikiLink').href = link;
+
+      const wikiImg = document.getElementById('wikiImg');
+      if (summaryData.thumbnail?.source) {
+        wikiImg.src = summaryData.thumbnail.source;
+        wikiImg.style.display = 'block';
+      } else {
+        wikiImg.style.display = 'none';
+      }
+
+      document.getElementById('wikiBox').style.display = 'block';
+      return { title: summaryData.title || titolo, link };
+    } catch (err) {
+      return null;
     }
+  };
 
-    document.getElementById('wikiBox').style.display = 'block';
+  // Primo tentativo: il termine così com'è
+  let risultato = await tentativo(nome);
+  if (risultato) return risultato;
 
-    return { title: summaryData.title || titolo, link };
-  } catch (err) {
-    return null;
+  // Secondo tentativo: rimuove parentesi e si limita alle prime 4 parole
+  const pulito = nome.replace(/\([^)]*\)/g, '').trim().split(/\s+/).slice(0, 4).join(' ');
+  if (pulito && pulito !== nome) {
+    risultato = await tentativo(pulito);
+    if (risultato) return risultato;
   }
+
+  return null;
 }
 
 // ---------- History ----------
