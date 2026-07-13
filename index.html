@@ -271,7 +271,9 @@
     <option value="ar">🇸🇦 العربية</option>
   </select>
   <button class="btn small secondary" id="locBtn">📍 Posizione dispositivo: off</button>
+  <button class="btn small secondary" id="dataSaverBtn">📶 Risparmio dati: off</button>
 </div>
+<p class="muted" style="text-align:center; margin-top:-8px; margin-bottom:4px; font-size:12px;">Ogni analisi invia la foto a un server per essere elaborata dall'IA: consuma dati. Se sei all'estero o con connessione limitata, attiva il risparmio dati per foto più compresse.</p>
 <p class="muted" style="text-align:center; margin-top:-8px; margin-bottom:16px; font-size:12px;">La posizione della foto (se presente nei metadati) viene usata automaticamente. Questo pulsante serve solo come alternativa se la foto non ha GPS salvato.</p>
 
 <div class="upload-box" id="standardUpload">
@@ -327,6 +329,13 @@
     <button class="btn small secondary" id="shareBtn">📤 Condividi</button>
     <button class="btn small secondary" id="speakBtn">🔊 Ascolta</button>
   </div>
+  <div style="margin-top:10px;">
+    <button class="btn small secondary" id="correctToggleBtn">❓ Non è corretto? Correggi</button>
+    <div id="correctBox" style="display:none; margin-top:8px;">
+      <input type="text" class="text-input" id="correctInput" placeholder="Es. Duomo di Firenze, Chiuse di Fort Augustus…">
+      <button class="btn small" id="correctSubmitBtn">Rianalizza con questo nome</button>
+    </div>
+  </div>
   <div class="wiki-box" id="wikiBox" style="display:none;">
     <img id="wikiImg" style="display:none;">
     <div class="wiki-title" id="wikiTitle"></div>
@@ -360,6 +369,8 @@ let currentLocation = null; // { lat, lon, label } - posizione attuale del dispo
 let locationEnabled = false;
 let lastLocationLabel = null;
 let lastLocationSource = null;
+let lastLocationCoords = null;
+let dataSaverMode = false;
 let lastResultText = '';
 let lastResultImageDataUrl = null;
 let fullHistoryCache = [];
@@ -377,6 +388,12 @@ modeSelect.addEventListener('change', () => {
   const box = uploadBoxes[modeSelect.value];
   if (box) box.style.display = 'block';
   resultCard.style.display = 'none';
+});
+
+const dataSaverBtn = document.getElementById('dataSaverBtn');
+dataSaverBtn.addEventListener('click', () => {
+  dataSaverMode = !dataSaverMode;
+  dataSaverBtn.textContent = dataSaverMode ? '📶 Risparmio dati: on' : '📶 Risparmio dati: off';
 });
 
 // ---------- Geolocation ----------
@@ -447,31 +464,41 @@ async function handleFile(e) {
   const file = e.target.files[0];
   if (!file) return;
 
+  lastAnalyzedFile = file;
+  lastAnalyzedMode = modeSelect.value;
+  document.getElementById('correctBox').style.display = 'none';
+
   resultCard.style.display = 'none';
   preview.src = URL.createObjectURL(file);
   preview.style.display = 'block';
   loading.style.display = 'block';
 
   try {
-    const { base64, mediaType } = await resizeAndEncode(file);
+    const maxDim = dataSaverMode ? 800 : 1280;
+    const quality = dataSaverMode ? 0.6 : 0.85;
+    const { base64, mediaType } = await resizeAndEncode(file, maxDim, quality);
     lastResultImageDataUrl = `data:${mediaType};base64,${base64}`;
 
     // Priorità: posizione GPS salvata nella foto stessa. Se assente, usa quella del dispositivo (se attiva).
     let locationLabel = null;
     let locationSource = null;
+    let locationCoords = null;
     try {
       const exifLoc = await getExifGPS(file);
       if (exifLoc) {
         locationLabel = await reverseGeocode(exifLoc.lat, exifLoc.lon);
         locationSource = 'foto';
+        locationCoords = exifLoc;
       }
     } catch (e) {}
     if (!locationLabel && locationEnabled && currentLocation) {
       locationLabel = currentLocation.label;
       locationSource = 'dispositivo';
+      locationCoords = { lat: currentLocation.lat, lon: currentLocation.lon };
     }
     lastLocationLabel = locationLabel;
     lastLocationSource = locationSource;
+    lastLocationCoords = locationCoords;
 
     const result = await analyzeImage(base64, mediaType, modeSelect.value, locationLabel);
     renderResult(result);
@@ -738,14 +765,70 @@ function renderResult(result) {
   const locEl = document.getElementById('locTag');
   if (lastLocationLabel) {
     const sourceLabel = lastLocationSource === 'foto' ? '📍 Dalla foto' : '📍 Posizione attuale del telefono';
-    locEl.textContent = `${sourceLabel}: ${lastLocationLabel}`;
+    let html = `${sourceLabel}: ${lastLocationLabel}`;
+    if (lastLocationCoords) {
+      html += ` — <a href="https://maps.apple.com/?ll=${lastLocationCoords.lat},${lastLocationCoords.lon}" target="_blank" style="color:var(--accent);">🗺️ Vedi sulla mappa</a>`;
+    }
+    locEl.innerHTML = html;
     locEl.style.display = 'block';
   } else {
-    locEl.style.display = 'none';
+    locEl.textContent = '📍 Nessun GPS trovato in questa foto';
+    locEl.style.display = 'block';
   }
 
   lastResultText = `${result.categoria || ''}\n${result.descrizione || ''}`;
   resultCard.style.display = 'block';
+}
+
+let lastAnalyzedFile = null;
+let lastAnalyzedMode = 'standard';
+
+const correctToggleBtn = document.getElementById('correctToggleBtn');
+const correctBox = document.getElementById('correctBox');
+const correctInput = document.getElementById('correctInput');
+const correctSubmitBtn = document.getElementById('correctSubmitBtn');
+
+correctToggleBtn.addEventListener('click', () => {
+  correctBox.style.display = correctBox.style.display === 'none' ? 'block' : 'none';
+});
+
+correctSubmitBtn.addEventListener('click', async () => {
+  const correzione = correctInput.value.trim();
+  if (!correzione || !lastAnalyzedFile) return;
+  loading.style.display = 'block';
+  correctBox.style.display = 'none';
+  try {
+    const maxDim = dataSaverMode ? 800 : 1280;
+    const quality = dataSaverMode ? 0.6 : 0.85;
+    const { base64, mediaType } = await resizeAndEncode(lastAnalyzedFile, maxDim, quality);
+    const result = await analyzeImageWithCorrection(base64, mediaType, lastAnalyzedMode, lastLocationLabel, correzione);
+    renderResult(result);
+    if (result.nome_probabile) {
+      await fetchWikipedia(result.nome_probabile);
+    }
+  } catch (err) {
+    alert('Errore durante la ricorrezione: ' + (err && err.message ? err.message : 'sconosciuto'));
+  } finally {
+    loading.style.display = 'none';
+    correctInput.value = '';
+  }
+});
+
+async function analyzeImageWithCorrection(base64, mediaType, mode, locationLabel, correzione) {
+  const res = await fetch(WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      imageBase64: base64,
+      mediaType,
+      modalita: mode,
+      lingua: langSelect.value,
+      posizione: locationLabel || null,
+      correzione: correzione
+    })
+  });
+  if (!res.ok) throw new Error('Richiesta fallita');
+  return res.json();
 }
 
 copyBtn.addEventListener('click', async () => {
