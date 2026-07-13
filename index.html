@@ -214,6 +214,28 @@
     max-width: 340px;
     width: 100%;
   }
+  #historyDetailPanel {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 997;
+    display: none;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 20px;
+    overflow-y: auto;
+  }
+  #historyDetailPanel .card {
+    display: block;
+    max-width: 480px;
+    width: 100%;
+    margin-top: 40px;
+  }
+  #historyDetailPanel img {
+    width: 100%;
+    border-radius: 12px;
+    margin-bottom: 14px;
+  }
 </style>
 </head>
 <body>
@@ -223,8 +245,8 @@
   <div id="lockSetupView">
     <h2>🔒 Proteggi FotoExplain</h2>
     <p class="muted">Imposta una password per questo dispositivo</p>
-    <input type="password" class="text-input" id="setupPwd1" placeholder="Nuova password">
-    <input type="password" class="text-input" id="setupPwd2" placeholder="Ripeti password">
+    <input type="password" class="text-input" id="setupPwd1" placeholder="Nuova password" autocomplete="new-password">
+    <input type="password" class="text-input" id="setupPwd2" placeholder="Ripeti password" autocomplete="new-password">
     <div id="setupError" style="color:#ff5c5c; font-size:13px; min-height:18px; margin:6px 0;"></div>
     <button class="btn" id="setupSaveBtn">Salva password</button>
     <p class="muted" style="margin-top:14px;"><button class="btn secondary small" id="skipLockBtn">Salta (nessun blocco)</button></p>
@@ -232,12 +254,22 @@
   <div id="lockUnlockView" style="display:none;">
     <h2>🔒 FotoExplain bloccato</h2>
     <p class="muted">Inserisci la password per continuare</p>
-    <input type="password" class="text-input" id="unlockPwdInput" placeholder="Password">
+    <input type="password" class="text-input" id="unlockPwdInput" placeholder="Password" autocomplete="off">
     <div id="lockError"></div>
     <button class="btn" id="unlockBtn">Sblocca</button>
     <div id="biometricArea" style="margin-top:10px; display:none;">
       <button class="btn secondary" id="biometricUnlockBtn">👆 Sblocca con Face ID / Touch ID</button>
     </div>
+  </div>
+</div>
+
+<!-- Pannello dettaglio cronologia -->
+<div id="historyDetailPanel">
+  <div class="card">
+    <img id="detailImg" alt="foto">
+    <span class="tag" id="detailCategoria"></span>
+    <p class="desc" id="detailDescrizione"></p>
+    <button class="btn secondary" id="closeDetailBtn" style="width:100%;">Chiudi</button>
   </div>
 </div>
 
@@ -388,6 +420,25 @@ modeSelect.addEventListener('change', () => {
   const box = uploadBoxes[modeSelect.value];
   if (box) box.style.display = 'block';
   resultCard.style.display = 'none';
+
+  // Ripulisce anteprime e input di file per evitare stati bloccati passando da una modalità all'altra
+  preview.style.display = 'none';
+  preview.src = '';
+  cameraInput.value = '';
+  libraryInput.value = '';
+
+  previewCompare1.style.display = 'none';
+  previewCompare1.src = '';
+  compareInput1.value = '';
+  compareFile1 = null;
+
+  previewCompare2.style.display = 'none';
+  previewCompare2.src = '';
+  compareInput2.value = '';
+  compareFile2 = null;
+
+  batchList.innerHTML = '';
+  batchInput.value = '';
 });
 
 const dataSaverBtn = document.getElementById('dataSaverBtn');
@@ -767,7 +818,7 @@ function renderResult(result) {
     const sourceLabel = lastLocationSource === 'foto' ? '📍 Dalla foto' : '📍 Posizione attuale del telefono';
     let html = `${sourceLabel}: ${lastLocationLabel}`;
     if (lastLocationCoords) {
-      html += ` — <a href="https://maps.apple.com/?ll=${lastLocationCoords.lat},${lastLocationCoords.lon}" target="_blank" style="color:var(--accent);">🗺️ Vedi sulla mappa</a>`;
+      html += ` — <a href="https://www.google.com/maps?q=${lastLocationCoords.lat},${lastLocationCoords.lon}&z=18" target="_blank" style="color:var(--accent);">🗺️ Vedi su Google Maps</a>`;
     }
     locEl.innerHTML = html;
     locEl.style.display = 'block';
@@ -1017,7 +1068,7 @@ function renderHistory(cronologia) {
     const data = new Date(item.data).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
     return `
       <div class="hist-item">
-        <img src="${item.thumb}" alt="miniatura">
+        <img src="${item.thumb}" alt="miniatura" class="hist-thumb" data-idx="${idx}" style="cursor:pointer;">
         <div class="hist-info">
           <div class="hist-cat">${item.categoria || 'altro'}</div>
           <div class="hist-desc">${item.descrizione || ''}</div>
@@ -1028,6 +1079,16 @@ function renderHistory(cronologia) {
     `;
   }).join('');
 
+  historyItems.querySelectorAll('.hist-thumb').forEach(img => {
+    img.addEventListener('click', () => {
+      const item = cronologia[parseInt(img.dataset.idx)];
+      document.getElementById('detailImg').src = item.thumb;
+      document.getElementById('detailCategoria').textContent = item.categoria || 'altro';
+      document.getElementById('detailDescrizione').textContent = item.descrizione || '';
+      document.getElementById('historyDetailPanel').style.display = 'flex';
+    });
+  });
+
   historyItems.querySelectorAll('.hist-del').forEach(btn => {
     btn.addEventListener('click', () => {
       const realIdx = fullHistoryCache.indexOf(cronologia[parseInt(btn.dataset.idx)]);
@@ -1035,6 +1096,10 @@ function renderHistory(cronologia) {
     });
   });
 }
+
+document.getElementById('closeDetailBtn').addEventListener('click', () => {
+  document.getElementById('historyDetailPanel').style.display = 'none';
+});
 
 exportCsvBtn.addEventListener('click', () => {
   if (!fullHistoryCache.length) { alert('Nessuna voce da esportare.'); return; }
