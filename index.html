@@ -293,8 +293,10 @@
     <option value="standard">🔍 Analisi standard</option>
     <option value="scientifico">🔬 Analisi scientifica (nome specie)</option>
     <option value="testo">📝 Leggi e traduci testo</option>
+    <option value="manoscritto">✍️ Leggi manoscritto</option>
     <option value="confronto">⚖️ Confronta due foto</option>
     <option value="batch">📚 Analisi multipla (batch)</option>
+    <option value="pdf">📄 Leggi/spiega/traduci PDF</option>
   </select>
   <select id="langSelect">
     <option value="it">🇮🇹 Italiano</option>
@@ -337,6 +339,18 @@
   <label class="btn" for="batchInput">Scegli foto multiple</label>
   <input type="file" id="batchInput" accept="image/*" multiple>
   <div id="batchList" style="margin-top:14px; text-align:left;"></div>
+</div>
+
+<div class="upload-box" id="pdfUpload" style="display:none;">
+  <p class="muted">Scegli un PDF: lo riassumo, lo spiego o lo traduco nella lingua selezionata sopra</p>
+  <label class="btn" for="pdfInput">Scegli PDF</label>
+  <input type="file" id="pdfInput" accept="application/pdf">
+  <select id="pdfActionSelect" style="margin-top:10px;">
+    <option value="riassumi">📝 Riassumi</option>
+    <option value="spiega">💡 Spiega in dettaglio</option>
+    <option value="traduci">🌍 Traduci integralmente</option>
+  </select>
+  <p id="pdfFileName" class="muted" style="margin-top:8px;"></p>
 </div>
 
 <div style="text-align:center; margin-bottom: 16px;">
@@ -416,8 +430,10 @@ const uploadBoxes = {
   standard: document.getElementById('standardUpload'),
   scientifico: document.getElementById('standardUpload'),
   testo: document.getElementById('standardUpload'),
+  manoscritto: document.getElementById('standardUpload'),
   confronto: document.getElementById('confrontoUpload'),
   batch: document.getElementById('batchUpload'),
+  pdf: document.getElementById('pdfUpload'),
 };
 modeSelect.addEventListener('change', () => {
   Object.values(uploadBoxes).forEach(el => el.style.display = 'none');
@@ -443,6 +459,9 @@ modeSelect.addEventListener('change', () => {
 
   batchList.innerHTML = '';
   batchInput.value = '';
+
+  document.getElementById('pdfInput').value = '';
+  document.getElementById('pdfFileName').textContent = '';
 });
 
 const dataSaverBtn = document.getElementById('dataSaverBtn');
@@ -643,6 +662,79 @@ document.getElementById('runCompareBtn').addEventListener('click', async () => {
 // ---------- Batch mode ----------
 const batchInput = document.getElementById('batchInput');
 const batchList = document.getElementById('batchList');
+
+// ---------- Modalità PDF ----------
+const pdfInput = document.getElementById('pdfInput');
+const pdfActionSelect = document.getElementById('pdfActionSelect');
+const pdfFileName = document.getElementById('pdfFileName');
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result.split(',')[1]);
+    reader.onerror = () => reject(new Error('Errore nella lettura del PDF'));
+    reader.readAsDataURL(file);
+  });
+}
+
+pdfInput.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  if (file.size > 30 * 1024 * 1024) {
+    alert('Il PDF è troppo grande (oltre 30MB). Prova con un file più leggero.');
+    pdfInput.value = '';
+    return;
+  }
+
+  pdfFileName.textContent = `📄 ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB) — elaborazione in corso…`;
+  resultCard.style.display = 'none';
+  loading.style.display = 'block';
+
+  try {
+    const base64 = await readFileAsBase64(file);
+    const azione = pdfActionSelect.value;
+    const result = await analyzePdf(base64, azione);
+    renderResult(result);
+    document.getElementById('locTag').style.display = 'none';
+    pdfFileName.textContent = `📄 ${file.name} — completato`;
+
+    saveHistoryEntry({
+      thumb: null,
+      categoria: result.categoria || 'documento',
+      descrizione: result.descrizione,
+      nomeScientifico: null,
+      wikiTitle: null,
+      wikiLink: null,
+      data: new Date().toISOString()
+    });
+  } catch (err) {
+    document.getElementById('categoria').textContent = 'errore';
+    document.getElementById('descrizione').textContent = 'Errore: ' + (err && err.message ? err.message : 'sconosciuto');
+    document.getElementById('locTag').style.display = 'none';
+    document.getElementById('nomeScientifico').style.display = 'none';
+    document.getElementById('wikiBox').style.display = 'none';
+    resultCard.style.display = 'block';
+    pdfFileName.textContent = `📄 ${file.name} — errore`;
+  } finally {
+    loading.style.display = 'none';
+  }
+});
+
+async function analyzePdf(base64, azione) {
+  const res = await fetch(WORKER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      modalita: 'pdf',
+      azionePdf: azione,
+      lingua: langSelect.value,
+      pdfBase64: base64
+    })
+  });
+  if (!res.ok) throw new Error('Richiesta fallita');
+  return res.json();
+}
 
 batchInput.addEventListener('change', async (e) => {
   const files = Array.from(e.target.files);
@@ -1111,9 +1203,12 @@ function renderHistory(cronologia) {
   }
   historyItems.innerHTML = cronologia.map((item, idx) => {
     const data = new Date(item.data).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const thumbHtml = item.thumb
+      ? `<img src="${item.thumb}" alt="miniatura" class="hist-thumb" data-idx="${idx}" style="cursor:pointer;">`
+      : `<div class="hist-thumb" data-idx="${idx}" style="cursor:pointer; width:60px; height:60px; border-radius:8px; background:#333844; display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0;">📄</div>`;
     return `
       <div class="hist-item">
-        <img src="${item.thumb}" alt="miniatura" class="hist-thumb" data-idx="${idx}" style="cursor:pointer;">
+        ${thumbHtml}
         <div class="hist-info">
           <div class="hist-cat">${item.categoria || 'altro'}</div>
           <div class="hist-desc">${item.descrizione || ''}</div>
@@ -1124,10 +1219,16 @@ function renderHistory(cronologia) {
     `;
   }).join('');
 
-  historyItems.querySelectorAll('.hist-thumb').forEach(img => {
-    img.addEventListener('click', () => {
-      const item = cronologia[parseInt(img.dataset.idx)];
-      document.getElementById('detailImg').src = item.thumb;
+  historyItems.querySelectorAll('.hist-thumb').forEach(el => {
+    el.addEventListener('click', () => {
+      const item = cronologia[parseInt(el.dataset.idx)];
+      const detailImg = document.getElementById('detailImg');
+      if (item.thumb) {
+        detailImg.src = item.thumb;
+        detailImg.style.display = 'block';
+      } else {
+        detailImg.style.display = 'none';
+      }
       document.getElementById('detailCategoria').textContent = item.categoria || 'altro';
       document.getElementById('detailDescrizione').textContent = item.descrizione || '';
       document.getElementById('historyDetailPanel').style.display = 'flex';
