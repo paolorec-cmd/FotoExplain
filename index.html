@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FotoExplain</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
   :root {
     --bg: #0f1115;
@@ -354,6 +356,7 @@
 <div class="card" id="resultCard">
   <span class="tag" id="categoria"></span>
   <div class="loc-tag" id="locTag" style="display:none;"></div>
+  <div class="loc-tag" id="debugTag" style="display:none; font-size:11px; opacity:0.6;"></div>
   <div class="sci-name" id="nomeScientifico" style="display:none;"></div>
   <p class="desc" id="descrizione"></p>
   <div>
@@ -402,6 +405,7 @@ let locationEnabled = false;
 let lastLocationLabel = null;
 let lastLocationSource = null;
 let lastLocationCoords = null;
+let lastDebugInfo = '';
 let dataSaverMode = false;
 let lastResultText = '';
 let lastResultImageDataUrl = null;
@@ -534,14 +538,20 @@ async function handleFile(e) {
     let locationLabel = null;
     let locationSource = null;
     let locationCoords = null;
+    let debugInfo = `tipo file: ${file.type || 'sconosciuto'}, nome: ${file.name || 'sconosciuto'}, dimensione: ${(file.size / 1024 / 1024).toFixed(1)}MB`;
     try {
       const exifLoc = await getExifGPS(file);
       if (exifLoc) {
         locationLabel = await reverseGeocode(exifLoc.lat, exifLoc.lon);
         locationSource = 'foto';
         locationCoords = exifLoc;
+        debugInfo += ` — GPS trovato: ${exifLoc.lat.toFixed(5)}, ${exifLoc.lon.toFixed(5)}`;
+      } else {
+        debugInfo += ` — EXIF letto ma nessun tag GPS presente`;
       }
-    } catch (e) {}
+    } catch (e) {
+      debugInfo += ` — errore lettura EXIF: ${e.message}`;
+    }
     if (!locationLabel && locationEnabled && currentLocation) {
       locationLabel = currentLocation.label;
       locationSource = 'dispositivo';
@@ -550,6 +560,7 @@ async function handleFile(e) {
     lastLocationLabel = locationLabel;
     lastLocationSource = locationSource;
     lastLocationCoords = locationCoords;
+    lastDebugInfo = debugInfo;
 
     const result = await analyzeImage(base64, mediaType, modeSelect.value, locationLabel);
     renderResult(result);
@@ -815,7 +826,9 @@ function renderResult(result) {
 
   const locEl = document.getElementById('locTag');
   if (lastLocationLabel) {
-    const sourceLabel = lastLocationSource === 'foto' ? '📍 Dalla foto' : '📍 Posizione attuale del telefono';
+    let sourceLabel = '📍 Posizione attuale del telefono';
+    if (lastLocationSource === 'foto') sourceLabel = '📍 Dalla foto';
+    else if (lastLocationSource === 'correzione') sourceLabel = '📍 Da te (corretta)';
     let html = `${sourceLabel}: ${lastLocationLabel}`;
     if (lastLocationCoords) {
       html += ` — <a href="https://www.google.com/maps?q=${lastLocationCoords.lat},${lastLocationCoords.lon}&z=18" target="_blank" style="color:var(--accent);">🗺️ Vedi su Google Maps</a>`;
@@ -825,6 +838,12 @@ function renderResult(result) {
   } else {
     locEl.textContent = '📍 Nessun GPS trovato in questa foto';
     locEl.style.display = 'block';
+  }
+
+  const debugEl = document.getElementById('debugTag');
+  if (debugEl) {
+    debugEl.textContent = '🔧 ' + lastDebugInfo;
+    debugEl.style.display = 'block';
   }
 
   lastResultText = `${result.categoria || ''}\n${result.descrizione || ''}`;
@@ -845,7 +864,16 @@ correctToggleBtn.addEventListener('click', () => {
 
 correctSubmitBtn.addEventListener('click', async () => {
   const correzione = correctInput.value.trim();
-  if (!correzione || !lastAnalyzedFile) return;
+  if (!correzione) {
+    correctInput.style.borderColor = 'var(--danger)';
+    correctInput.placeholder = 'Scrivi qui il nome prima di rianalizzare';
+    return;
+  }
+  if (!lastAnalyzedFile) {
+    alert('Nessuna foto analizzata di recente da correggere.');
+    return;
+  }
+  correctInput.style.borderColor = '';
   loading.style.display = 'block';
   correctBox.style.display = 'none';
   try {
@@ -853,6 +881,23 @@ correctSubmitBtn.addEventListener('click', async () => {
     const quality = dataSaverMode ? 0.6 : 0.85;
     const { base64, mediaType } = await resizeAndEncode(lastAnalyzedFile, maxDim, quality);
     const result = await analyzeImageWithCorrection(base64, mediaType, lastAnalyzedMode, lastLocationLabel, correzione);
+
+    // Prova a geocodificare il nome corretto scritto dall'utente, così la mappa funziona
+    // anche quando la foto non aveva GPS salvato.
+    try {
+      const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(correzione)}&format=json&limit=1`, {
+        headers: { 'Accept-Language': langSelect.value }
+      });
+      if (geoRes.ok) {
+        const geoData = await geoRes.json();
+        if (geoData && geoData[0]) {
+          lastLocationCoords = { lat: parseFloat(geoData[0].lat), lon: parseFloat(geoData[0].lon) };
+          lastLocationLabel = geoData[0].display_name || correzione;
+          lastLocationSource = 'correzione';
+        }
+      }
+    } catch (geoErr) {}
+
     renderResult(result);
     if (result.nome_probabile) {
       await fetchWikipedia(result.nome_probabile);
