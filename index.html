@@ -242,6 +242,21 @@
 </head>
 <body>
 
+<div id="jsErrorBanner" style="display:none; position:fixed; top:0; left:0; right:0; background:#ff5c5c; color:white; padding:12px; font-size:13px; z-index:9999; word-break:break-word;"></div>
+<script>
+  function showJsError(msg) {
+    const banner = document.getElementById('jsErrorBanner');
+    banner.textContent = '⚠️ Errore JS: ' + msg;
+    banner.style.display = 'block';
+  }
+  window.addEventListener('error', (e) => {
+    showJsError((e.message || 'errore sconosciuto') + ' — riga ' + (e.lineno || '?'));
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    showJsError('Promise non gestita: ' + (e.reason && e.reason.message ? e.reason.message : JSON.stringify(e.reason)));
+  });
+</script>
+
 <!-- Schermo di blocco -->
 <div id="lockScreen">
   <div id="lockSetupView">
