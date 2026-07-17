@@ -180,6 +180,27 @@
   .batch-item img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; }
   .batch-status { font-size: 12px; color: var(--muted); }
 
+  #printArea { display: none; }
+
+  @media print {
+    body * { visibility: hidden; }
+    #printArea, #printArea * { visibility: visible; }
+    #printArea {
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      background: white;
+      color: black;
+      padding: 20px;
+    }
+    #printArea img { max-width: 100%; border-radius: 0; margin-bottom: 16px; }
+    #printArea h2 { font-size: 20px; margin-bottom: 4px; }
+    #printArea .print-meta { font-size: 12px; color: #555; margin-bottom: 16px; }
+    #printArea p { font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+  }
+
   #lockScreen {
     position: fixed;
     inset: 0;
@@ -382,6 +403,13 @@
 
 <div class="loading" id="loading">Analisi in corso…</div>
 
+<div id="printArea">
+  <h2 id="printCategoria"></h2>
+  <div class="print-meta" id="printMeta"></div>
+  <img id="printImg" style="display:none;">
+  <p id="printDescrizione"></p>
+</div>
+
 <div class="card" id="resultCard">
   <span class="tag" id="categoria"></span>
   <div class="loc-tag" id="locTag" style="display:none;"></div>
@@ -392,6 +420,7 @@
     <button class="btn small secondary" id="copyBtn">📋 Copia</button>
     <button class="btn small secondary" id="shareBtn">📤 Condividi</button>
     <button class="btn small secondary" id="speakBtn">🔊 Ascolta</button>
+    <button class="btn small secondary" id="savePdfBtn">🖨️ Salva PDF</button>
   </div>
   <div style="margin-top:10px;">
     <button class="btn small secondary" id="correctToggleBtn">❓ Non è corretto? Correggi</button>
@@ -705,6 +734,7 @@ pdfInput.addEventListener('change', async (e) => {
   pdfFileName.textContent = `📄 ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB) — elaborazione in corso…`;
   resultCard.style.display = 'none';
   loading.style.display = 'block';
+  lastResultImageDataUrl = null;
 
   try {
     const base64 = await readFileAsBase64(file);
@@ -1061,6 +1091,26 @@ shareBtn.addEventListener('click', async () => {
       alert('Condivisione non supportata: testo copiato negli appunti.');
     }
   } catch (err) {}
+});
+
+document.getElementById('savePdfBtn').addEventListener('click', () => {
+  const categoria = document.getElementById('categoria').textContent || '';
+  const descrizione = document.getElementById('descrizione').textContent || '';
+  const dataOra = new Date().toLocaleString('it-IT');
+
+  document.getElementById('printCategoria').textContent = 'FotoExplain — ' + categoria;
+  document.getElementById('printMeta').textContent = dataOra;
+  document.getElementById('printDescrizione').textContent = descrizione;
+
+  const printImg = document.getElementById('printImg');
+  if (lastResultImageDataUrl) {
+    printImg.src = lastResultImageDataUrl;
+    printImg.style.display = 'block';
+  } else {
+    printImg.style.display = 'none';
+  }
+
+  window.print();
 });
 
 const speakBtn = document.getElementById('speakBtn');
