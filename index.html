@@ -421,6 +421,7 @@
     <button class="btn small secondary" id="shareBtn">📤 Condividi</button>
     <button class="btn small secondary" id="speakBtn">🔊 Ascolta</button>
     <button class="btn small secondary" id="savePdfBtn">🖨️ Salva PDF</button>
+    <button class="btn small secondary" id="saveCleanPdfBtn" style="display:none;">📄 Salva solo documento</button>
   </div>
   <div style="margin-top:10px;">
     <button class="btn small secondary" id="correctToggleBtn">❓ Non è corretto? Correggi</button>
@@ -466,6 +467,7 @@ let lastLocationCoords = null;
 let lastDebugInfo = '';
 let dataSaverMode = false;
 let lastResultText = '';
+let lastCleanText = null;
 let lastResultImageDataUrl = null;
 let fullHistoryCache = [];
 
@@ -654,6 +656,7 @@ async function handleFile(e) {
     document.getElementById('locTag').style.display = 'none';
     document.getElementById('nomeScientifico').style.display = 'none';
     document.getElementById('wikiBox').style.display = 'none';
+    document.getElementById('saveCleanPdfBtn').style.display = 'none';
     resultCard.style.display = 'block';
   } finally {
     loading.style.display = 'none';
@@ -759,6 +762,7 @@ pdfInput.addEventListener('change', async (e) => {
     document.getElementById('locTag').style.display = 'none';
     document.getElementById('nomeScientifico').style.display = 'none';
     document.getElementById('wikiBox').style.display = 'none';
+    document.getElementById('saveCleanPdfBtn').style.display = 'none';
     resultCard.style.display = 'block';
     pdfFileName.textContent = `📄 ${file.name} — errore`;
   } finally {
@@ -952,6 +956,10 @@ function renderResult(result) {
   document.getElementById('categoria').textContent = result.categoria || 'altro';
   document.getElementById('descrizione').textContent = result.descrizione || '';
   document.getElementById('wikiBox').style.display = 'none';
+    document.getElementById('saveCleanPdfBtn').style.display = 'none';
+
+  lastCleanText = result.testo_pulito || null;
+  document.getElementById('saveCleanPdfBtn').style.display = lastCleanText ? 'inline-block' : 'none';
 
   const sciEl = document.getElementById('nomeScientifico');
   if (result.nome_scientifico) {
@@ -1109,6 +1117,18 @@ document.getElementById('savePdfBtn').addEventListener('click', () => {
   } else {
     printImg.style.display = 'none';
   }
+
+  window.print();
+});
+
+document.getElementById('saveCleanPdfBtn').addEventListener('click', () => {
+  if (!lastCleanText) return;
+
+  // Documento pulito: niente intestazione FotoExplain, niente categoria, niente immagine — solo il testo.
+  document.getElementById('printCategoria').textContent = '';
+  document.getElementById('printMeta').textContent = '';
+  document.getElementById('printDescrizione').textContent = lastCleanText;
+  document.getElementById('printImg').style.display = 'none';
 
   window.print();
 });
