@@ -354,6 +354,12 @@
   <input type="file" id="cameraInput" accept="image/*" capture="environment">
   <label class="btn secondary" for="libraryInput">Da libreria</label>
   <input type="file" id="libraryInput" accept="image/*">
+  <select id="textActionSelect" style="display:none; margin-top:10px;">
+    <option value="leggi">📖 Leggi e traduci (solo il testo)</option>
+    <option value="riassumi">📝 Riassumi</option>
+    <option value="spiega">💡 Spiega (anche a cosa servono le cose)</option>
+    <option value="traduci">🌍 Traduci integralmente</option>
+  </select>
   <img id="preview" alt="anteprima">
 </div>
 
@@ -486,6 +492,8 @@ modeSelect.addEventListener('change', () => {
   const box = uploadBoxes[modeSelect.value];
   if (box) box.style.display = 'block';
   resultCard.style.display = 'none';
+
+  document.getElementById('textActionSelect').style.display = (modeSelect.value === 'testo') ? 'block' : 'none';
 
   // Ripulisce anteprime e input di file per evitare stati bloccati passando da una modalità all'altra
   preview.style.display = 'none';
@@ -920,6 +928,7 @@ function resizeDataUrlToThumb(dataUrl, maxDim = 200, quality = 0.6) {
 }
 
 async function analyzeImage(base64, mediaType, mode, locationLabel) {
+  const azioneTesto = mode === 'testo' ? document.getElementById('textActionSelect').value : null;
   const res = await fetch(WORKER_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -927,6 +936,7 @@ async function analyzeImage(base64, mediaType, mode, locationLabel) {
       imageBase64: base64,
       mediaType,
       modalita: mode,
+      azioneTesto: azioneTesto,
       lingua: langSelect.value,
       posizione: locationLabel || null
     })
