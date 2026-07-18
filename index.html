@@ -1,1516 +1,282 @@
-<!DOCTYPE html>
-<html lang="it">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FotoExplain</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.js"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<style>
-  :root {
-    --bg: #0f1115;
-    --card: #1a1d24;
-    --accent: #4f9dff;
-    --text: #e8e9ec;
-    --muted: #9aa0ab;
-    --danger: #ff5c5c;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-    padding: 20px;
-  }
-  h1 {
-    font-size: 22px;
-    text-align: center;
-    margin-bottom: 20px;
-    font-weight: 600;
-  }
-  .upload-box {
-    background: var(--card);
-    border: 2px dashed #333844;
-    border-radius: 16px;
-    padding: 30px 20px;
-    text-align: center;
-    margin-bottom: 20px;
-  }
-  input[type="file"] { display: none; }
-  .btn {
-    display: inline-block;
-    background: var(--accent);
-    color: white;
-    padding: 12px 24px;
-    border-radius: 10px;
-    font-weight: 600;
-    cursor: pointer;
-    border: none;
-    font-size: 16px;
-    margin: 6px;
-  }
-  .btn:active { opacity: 0.8; }
-  .btn.secondary { background: #333844; }
-  .btn.danger { background: var(--danger); }
-  .btn.small {
-    padding: 8px 14px;
-    font-size: 13px;
-    margin: 4px;
-  }
-  select, .text-input {
-    background: var(--card);
-    color: var(--text);
-    border: 1px solid #333844;
-    border-radius: 10px;
-    padding: 10px 12px;
-    font-size: 14px;
-    margin: 6px;
-    width: calc(100% - 12px);
-  }
-  .controls-row {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 4px;
-    margin-bottom: 12px;
-  }
-  #preview, .preview-secondary {
-    width: 100%;
-    border-radius: 14px;
-    margin-top: 16px;
-    display: none;
-  }
-  .card {
-    background: var(--card);
-    border-radius: 14px;
-    padding: 18px;
-    margin-top: 16px;
-    display: none;
-  }
-  .tag {
-    display: inline-block;
-    background: var(--accent);
-    color: white;
-    font-size: 12px;
-    padding: 4px 10px;
-    border-radius: 20px;
-    margin-bottom: 10px;
-    text-transform: uppercase;
-  }
-  .desc { line-height: 1.5; margin-bottom: 12px; white-space: pre-wrap; }
-  .sci-name { font-style: italic; color: var(--muted); margin-bottom: 10px; font-size: 14px; }
-  .loc-tag { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
-  .wiki-box {
-    border-top: 1px solid #333844;
-    padding-top: 12px;
-    margin-top: 12px;
-  }
-  .wiki-box img {
-    width: 100%;
-    border-radius: 10px;
-    margin-bottom: 10px;
-  }
-  .wiki-title { font-weight: 600; margin-bottom: 6px; }
-  .wiki-link {
-    color: var(--accent);
-    text-decoration: none;
-    font-size: 14px;
-  }
-  .loading {
-    text-align: center;
-    color: var(--muted);
-    padding: 20px;
-    display: none;
-  }
-  .muted { color: var(--muted); font-size: 14px; }
-  .hist-item {
-    display: flex;
-    gap: 12px;
-    background: var(--card);
-    border-radius: 12px;
-    padding: 10px;
-    margin-bottom: 10px;
-    align-items: center;
-  }
-  .hist-item img {
-    width: 60px;
-    height: 60px;
-    object-fit: cover;
-    border-radius: 8px;
-    flex-shrink: 0;
-  }
-  .hist-info { flex: 1; min-width: 0; }
-  .hist-cat {
-    font-size: 11px;
-    color: var(--accent);
-    text-transform: uppercase;
-    font-weight: 600;
-  }
-  .hist-desc {
-    font-size: 13px;
-    color: var(--text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
-  .hist-date { font-size: 11px; color: var(--muted); margin-top: 2px; }
-  .hist-del {
-    background: none;
-    border: none;
-    color: var(--danger);
-    font-size: 20px;
-    cursor: pointer;
-    flex-shrink: 0;
-    padding: 4px 8px;
-  }
-  .batch-item {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    background: var(--card);
-    border-radius: 10px;
-    padding: 8px;
-    margin-bottom: 8px;
-  }
-  .batch-item img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; }
-  .batch-status { font-size: 12px; color: var(--muted); }
+export default {
+  async fetch(request, env) {
+    const corsHeaders = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type",
+    };
 
-  #printArea { display: none; }
-
-  @media print {
-    body * { visibility: hidden; }
-    #printArea, #printArea * { visibility: visible; }
-    #printArea {
-      display: block;
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      background: white;
-      color: black;
-      padding: 20px;
+    if (request.method === "OPTIONS") {
+      return new Response(null, { headers: corsHeaders });
     }
-    #printArea img { max-width: 100%; border-radius: 0; margin-bottom: 16px; }
-    #printArea h2 { font-size: 20px; margin-bottom: 4px; }
-    #printArea .print-meta { font-size: 12px; color: #555; margin-bottom: 16px; }
-    #printArea p { font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
-  }
 
-  #lockScreen {
-    position: fixed;
-    inset: 0;
-    background: var(--bg);
-    z-index: 999;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    text-align: center;
-  }
-  #lockScreen h2 { font-size: 20px; margin-bottom: 6px; }
-  #lockScreen .muted { margin-bottom: 20px; }
-  #lockScreen .text-input {
-    max-width: 280px;
-    text-align: center;
-    font-size: 16px;
-  }
-  #lockScreen .btn { max-width: 280px; width: 100%; }
-  #lockError { color: var(--danger); font-size: 13px; min-height: 18px; margin-top: 6px; }
-  #settingsPanel {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.6);
-    z-index: 998;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-  }
-  #settingsPanel .card {
-    display: block;
-    max-width: 340px;
-    width: 100%;
-  }
-  #historyDetailPanel {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.85);
-    z-index: 997;
-    display: none;
-    align-items: flex-start;
-    justify-content: center;
-    padding: 20px;
-    overflow-y: auto;
-  }
-  #historyDetailPanel .card {
-    display: block;
-    max-width: 480px;
-    width: 100%;
-    margin-top: 40px;
-  }
-  #historyDetailPanel img {
-    width: 100%;
-    border-radius: 12px;
-    margin-bottom: 14px;
-  }
-</style>
-</head>
-<body>
-
-<div id="jsErrorBanner" style="display:none; position:fixed; top:0; left:0; right:0; background:#ff5c5c; color:white; padding:12px; font-size:13px; z-index:9999; word-break:break-word;"></div>
-<script>
-  function showJsError(msg) {
-    const banner = document.getElementById('jsErrorBanner');
-    banner.textContent = '⚠️ Errore JS: ' + msg;
-    banner.style.display = 'block';
-  }
-  window.addEventListener('error', (e) => {
-    showJsError((e.message || 'errore sconosciuto') + ' — riga ' + (e.lineno || '?'));
-  });
-  window.addEventListener('unhandledrejection', (e) => {
-    showJsError('Promise non gestita: ' + (e.reason && e.reason.message ? e.reason.message : JSON.stringify(e.reason)));
-  });
-</script>
-
-<!-- Schermo di blocco -->
-<div id="lockScreen">
-  <div id="lockSetupView">
-    <h2>🔒 Proteggi FotoExplain</h2>
-    <p class="muted">Imposta una password per questo dispositivo</p>
-    <input type="password" class="text-input" id="setupPwd1" placeholder="Nuova password" autocomplete="new-password">
-    <input type="password" class="text-input" id="setupPwd2" placeholder="Ripeti password" autocomplete="new-password">
-    <div id="setupError" style="color:#ff5c5c; font-size:13px; min-height:18px; margin:6px 0;"></div>
-    <button class="btn" id="setupSaveBtn">Salva password</button>
-    <p class="muted" style="margin-top:14px;"><button class="btn secondary small" id="skipLockBtn">Salta (nessun blocco)</button></p>
-  </div>
-  <div id="lockUnlockView" style="display:none;">
-    <h2>🔒 FotoExplain bloccato</h2>
-    <p class="muted">Inserisci la password per continuare</p>
-    <input type="password" class="text-input" id="unlockPwdInput" placeholder="Password" autocomplete="off">
-    <div id="lockError"></div>
-    <button class="btn" id="unlockBtn">Sblocca</button>
-    <div id="biometricArea" style="margin-top:10px; display:none;">
-      <button class="btn secondary" id="biometricUnlockBtn">👆 Sblocca con Face ID / Touch ID</button>
-    </div>
-  </div>
-</div>
-
-<!-- Pannello dettaglio cronologia -->
-<div id="historyDetailPanel">
-  <div class="card">
-    <img id="detailImg" alt="foto">
-    <span class="tag" id="detailCategoria"></span>
-    <p class="desc" id="detailDescrizione"></p>
-    <button class="btn secondary" id="closeDetailBtn" style="width:100%;">Chiudi</button>
-  </div>
-</div>
-
-<!-- Pannello impostazioni sicurezza -->
-<div id="settingsPanel">
-  <div class="card">
-    <h2 style="margin-top:0;">🔐 Sicurezza</h2>
-    <button class="btn secondary" id="changePwdBtn" style="width:100%;">Cambia password</button>
-    <button class="btn secondary" id="enableBiometricBtn" style="width:100%;">👆 Abilita Face ID / Touch ID</button>
-    <button class="btn secondary" id="disableLockBtn" style="width:100%; background:#ff5c5c;">Disattiva blocco</button>
-    <button class="btn secondary" id="closeSettingsBtn" style="width:100%;">Chiudi</button>
-  </div>
-</div>
-
-<h1>📸 FotoExplain <button class="btn small secondary" id="openSettingsBtn" style="float:right;">🔐</button></h1>
-
-<div class="controls-row">
-  <select id="modeSelect">
-    <option value="standard">🔍 Analisi standard</option>
-    <option value="scientifico">🔬 Analisi scientifica (nome specie)</option>
-    <option value="testo">📝 Leggi e traduci testo</option>
-    <option value="manoscritto">✍️ Leggi manoscritto</option>
-    <option value="confronto">⚖️ Confronta due foto</option>
-    <option value="batch">📚 Analisi multipla (batch)</option>
-    <option value="pdf">📄 Leggi/spiega/traduci PDF</option>
-  </select>
-  <select id="langSelect">
-    <option value="it">🇮🇹 Italiano</option>
-    <option value="en">🇬🇧 English</option>
-    <option value="fr">🇫🇷 Français</option>
-    <option value="es">🇪🇸 Español</option>
-    <option value="de">🇩🇪 Deutsch</option>
-    <option value="ar">🇸🇦 العربية</option>
-  </select>
-  <button class="btn small secondary" id="locBtn">📍 Posizione dispositivo: off</button>
-  <button class="btn small secondary" id="dataSaverBtn">📶 Risparmio dati: off</button>
-</div>
-<p class="muted" style="text-align:center; margin-top:-8px; margin-bottom:4px; font-size:12px;">Ogni analisi invia la foto a un server per essere elaborata dall'IA: consuma dati. Se sei all'estero o con connessione limitata, attiva il risparmio dati per foto più compresse.</p>
-<p class="muted" style="text-align:center; margin-top:-8px; margin-bottom:16px; font-size:12px;">La posizione della foto (se presente nei metadati) viene usata automaticamente. Questo pulsante serve solo come alternativa se la foto non ha GPS salvato.</p>
-
-<div class="upload-box" id="standardUpload">
-  <p class="muted">Scatta o scegli una foto: monumenti, architettura, fiori, animali</p>
-  <label class="btn" for="cameraInput">Scatta foto</label>
-  <input type="file" id="cameraInput" accept="image/*" capture="environment">
-  <label class="btn secondary" for="libraryInput">Da libreria</label>
-  <input type="file" id="libraryInput" accept="image/*">
-  <select id="textActionSelect" style="display:none; margin-top:10px;">
-    <option value="leggi">📖 Leggi e traduci (solo il testo)</option>
-    <option value="riassumi">📝 Riassumi</option>
-    <option value="spiega">💡 Spiega (anche a cosa servono le cose)</option>
-    <option value="traduci">🌍 Traduci integralmente</option>
-  </select>
-  <img id="preview" alt="anteprima">
-</div>
-
-<div class="upload-box" id="confrontoUpload" style="display:none;">
-  <p class="muted">Scegli due foto da confrontare</p>
-  <label class="btn" for="compareInput1">Foto 1</label>
-  <input type="file" id="compareInput1" accept="image/*">
-  <label class="btn secondary" for="compareInput2">Foto 2</label>
-  <input type="file" id="compareInput2" accept="image/*">
-  <img id="previewCompare1" class="preview-secondary" alt="anteprima 1">
-  <img id="previewCompare2" class="preview-secondary" alt="anteprima 2">
-  <div style="text-align:center; margin-top:10px;">
-    <button class="btn" id="runCompareBtn">Confronta</button>
-  </div>
-</div>
-
-<div class="upload-box" id="batchUpload" style="display:none;">
-  <p class="muted">Scegli più foto da analizzare in sequenza</p>
-  <label class="btn" for="batchInput">Scegli foto multiple</label>
-  <input type="file" id="batchInput" accept="image/*" multiple>
-  <div id="batchList" style="margin-top:14px; text-align:left;"></div>
-</div>
-
-<div class="upload-box" id="pdfUpload" style="display:none;">
-  <p class="muted">Scegli un PDF: lo riassumo, lo spiego o lo traduco nella lingua selezionata sopra</p>
-  <label class="btn" for="pdfInput">Scegli PDF</label>
-  <input type="file" id="pdfInput" accept="application/pdf">
-  <select id="pdfActionSelect" style="margin-top:10px;">
-    <option value="riassumi">📝 Riassumi</option>
-    <option value="spiega">💡 Spiega in dettaglio</option>
-    <option value="traduci">🌍 Traduci integralmente</option>
-  </select>
-  <p id="pdfFileName" class="muted" style="margin-top:8px;"></p>
-</div>
-
-<div style="text-align:center; margin-bottom: 16px;">
-  <button class="btn secondary" id="toggleHistoryBtn">📜 Cronologia</button>
-</div>
-
-<div id="historyList" style="display:none;">
-  <input type="text" class="text-input" id="historySearch" placeholder="Cerca nella cronologia…">
-  <div style="text-align:center; margin-bottom: 10px;">
-    <button class="btn small secondary" id="exportCsvBtn">⬇️ Esporta CSV</button>
-  </div>
-  <div id="historyItems"></div>
-</div>
-
-<div class="loading" id="loading">Analisi in corso…</div>
-
-<div id="printArea">
-  <h2 id="printCategoria"></h2>
-  <div class="print-meta" id="printMeta"></div>
-  <img id="printImg" style="display:none;">
-  <p id="printDescrizione"></p>
-</div>
-
-<div class="card" id="resultCard">
-  <span class="tag" id="categoria"></span>
-  <div class="loc-tag" id="locTag" style="display:none;"></div>
-  <div class="loc-tag" id="debugTag" style="display:none; font-size:11px; opacity:0.6;"></div>
-  <div class="sci-name" id="nomeScientifico" style="display:none;"></div>
-  <p class="desc" id="descrizione"></p>
-  <div>
-    <button class="btn small secondary" id="copyBtn">📋 Copia</button>
-    <button class="btn small secondary" id="shareBtn">📤 Condividi</button>
-    <button class="btn small secondary" id="speakBtn">🔊 Ascolta</button>
-    <button class="btn small secondary" id="savePdfBtn">🖨️ Salva PDF</button>
-    <button class="btn small secondary" id="saveCleanPdfBtn" style="display:none;">📄 Salva solo documento</button>
-  </div>
-  <div style="margin-top:10px;">
-    <button class="btn small secondary" id="correctToggleBtn">❓ Non è corretto? Correggi</button>
-    <div id="correctBox" style="display:none; margin-top:8px;">
-      <input type="text" class="text-input" id="correctInput" placeholder="Es. Duomo di Firenze, Chiuse di Fort Augustus…">
-      <button class="btn small" id="correctSubmitBtn">Rianalizza con questo nome</button>
-    </div>
-  </div>
-  <div class="wiki-box" id="wikiBox" style="display:none;">
-    <img id="wikiImg" style="display:none;">
-    <div class="wiki-title" id="wikiTitle"></div>
-    <p class="desc" id="wikiExtract"></p>
-    <a class="wiki-link" id="wikiLink" href="#" target="_blank">Leggi su Wikipedia →</a>
-  </div>
-</div>
-
-<script>
-const WORKER_URL = "https://foto-explain-proxy.paolo-rec.workers.dev";
-const JSONBIN_URL = "https://api.jsonbin.io/v3/b/6a5168e0da38895dfe4d4165";
-const JSONBIN_KEY = "$2a$10$N6rS9lsMasoj1H/DjQ.w6Og9ZDBGWK/GbGQ0/BLMwTSSPh6vEnyPO";
-
-const cameraInput = document.getElementById('cameraInput');
-const libraryInput = document.getElementById('libraryInput');
-const preview = document.getElementById('preview');
-const loading = document.getElementById('loading');
-const resultCard = document.getElementById('resultCard');
-const historyList = document.getElementById('historyList');
-const historyItems = document.getElementById('historyItems');
-const toggleHistoryBtn = document.getElementById('toggleHistoryBtn');
-const modeSelect = document.getElementById('modeSelect');
-const langSelect = document.getElementById('langSelect');
-const locBtn = document.getElementById('locBtn');
-const historySearch = document.getElementById('historySearch');
-const exportCsvBtn = document.getElementById('exportCsvBtn');
-const copyBtn = document.getElementById('copyBtn');
-const shareBtn = document.getElementById('shareBtn');
-
-let currentLocation = null; // { lat, lon, label } - posizione attuale del dispositivo
-let locationEnabled = false;
-let lastLocationLabel = null;
-let lastLocationSource = null;
-let lastLocationCoords = null;
-let lastDebugInfo = '';
-let dataSaverMode = false;
-let lastResultText = '';
-let lastCleanText = null;
-let lastResultImageDataUrl = null;
-let fullHistoryCache = [];
-
-// ---------- Mode switching ----------
-const uploadBoxes = {
-  standard: document.getElementById('standardUpload'),
-  scientifico: document.getElementById('standardUpload'),
-  testo: document.getElementById('standardUpload'),
-  manoscritto: document.getElementById('standardUpload'),
-  confronto: document.getElementById('confrontoUpload'),
-  batch: document.getElementById('batchUpload'),
-  pdf: document.getElementById('pdfUpload'),
-};
-modeSelect.addEventListener('change', () => {
-  Object.values(uploadBoxes).forEach(el => el.style.display = 'none');
-  const box = uploadBoxes[modeSelect.value];
-  if (box) box.style.display = 'block';
-  resultCard.style.display = 'none';
-
-  document.getElementById('textActionSelect').style.display = (modeSelect.value === 'testo') ? 'block' : 'none';
-
-  // Ripulisce anteprime e input di file per evitare stati bloccati passando da una modalità all'altra
-  preview.style.display = 'none';
-  preview.src = '';
-  cameraInput.value = '';
-  libraryInput.value = '';
-
-  previewCompare1.style.display = 'none';
-  previewCompare1.src = '';
-  compareInput1.value = '';
-  compareFile1 = null;
-
-  previewCompare2.style.display = 'none';
-  previewCompare2.src = '';
-  compareInput2.value = '';
-  compareFile2 = null;
-
-  batchList.innerHTML = '';
-  batchInput.value = '';
-
-  document.getElementById('pdfInput').value = '';
-  document.getElementById('pdfFileName').textContent = '';
-});
-
-const dataSaverBtn = document.getElementById('dataSaverBtn');
-dataSaverBtn.addEventListener('click', () => {
-  dataSaverMode = !dataSaverMode;
-  dataSaverBtn.textContent = dataSaverMode ? '📶 Risparmio dati: on' : '📶 Risparmio dati: off';
-});
-
-// ---------- Geolocation ----------
-async function reverseGeocode(lat, lon) {
-  let label = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
-  try {
-    const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json`, {
-      headers: { 'Accept-Language': langSelect.value }
-    });
-    if (geoRes.ok) {
-      const geoData = await geoRes.json();
-      if (geoData.display_name) label = geoData.display_name;
+    if (request.method !== "POST") {
+      return new Response("Method not allowed", { status: 405, headers: corsHeaders });
     }
-  } catch (e) {}
-  return label;
-}
 
-function getExifGPS(file) {
-  return new Promise((resolve) => {
-    if (typeof EXIF === 'undefined') { resolve(null); return; }
     try {
-      EXIF.getData(file, function () {
-        const lat = EXIF.getTag(this, "GPSLatitude");
-        const lon = EXIF.getTag(this, "GPSLongitude");
-        const latRef = EXIF.getTag(this, "GPSLatitudeRef") || 'N';
-        const lonRef = EXIF.getTag(this, "GPSLongitudeRef") || 'E';
-        if (!lat || !lon) { resolve(null); return; }
-        const toDecimal = (dms, ref) => {
-          let dec = dms[0] + dms[1] / 60 + dms[2] / 3600;
-          if (ref === 'S' || ref === 'W') dec = -dec;
-          return dec;
+      const body = await request.json();
+      const imageBase64 = body.imageBase64;
+      const mediaType = body.mediaType;
+      const modalita = body.modalita || "standard";
+      const lingua = body.lingua || "it";
+      const posizione = body.posizione || null;
+      const correzione = body.correzione || null;
+      const imageBase64_2 = body.imageBase64_2 || null;
+      const mediaType_2 = body.mediaType_2 || null;
+      const pdfBase64 = body.pdfBase64 || null;
+      const azionePdf = body.azionePdf || "riassumi";
+      const azioneTesto = body.azioneTesto || "leggi";
+
+      const languageNamesGlobal = {
+        it: "italiano", en: "inglese", fr: "francese", es: "spagnolo", de: "tedesco", ar: "arabo"
+      };
+
+      // ---------- Gestione PDF (percorso separato, non richiede immagine) ----------
+      if (modalita === "pdf" && pdfBase64) {
+        const linguaPdf = languageNamesGlobal[lingua] || "italiano";
+        let istruzionePdf = "";
+        if (azionePdf === "traduci") {
+          istruzionePdf = `Traduci integralmente il contenuto di questo documento PDF in ${linguaPdf}, mantenendo la struttura (paragrafi, elenchi, titoli) il più possibile fedele all'originale.`;
+        } else if (azionePdf === "spiega") {
+          istruzionePdf = `Spiega in modo chiaro e dettagliato, in ${linguaPdf}, il contenuto di questo documento PDF: di cosa parla, i punti chiave, eventuali termini tecnici semplificati, la struttura generale. Scrivi come se lo stessi spiegando a qualcuno che non l'ha letto.`;
+        } else {
+          istruzionePdf = `Riassumi in ${linguaPdf} il contenuto di questo documento PDF, evidenziando i punti principali in modo conciso ma completo.`;
+        }
+
+        const pdfPrompt = `${istruzionePdf}
+
+Rispondi SOLO con un oggetto JSON valido, senza testo prima o dopo, senza markdown, con questa struttura esatta:
+{"categoria": "documento", "descrizione": "il tuo output completo qui, in ${linguaPdf}, puoi includere eventuali note o commenti utili (es. se il documento era già in ${linguaPdf} per la modalità traduzione)", "testo_pulito": "SOLO il contenuto puro richiesto (la traduzione integrale, o il riassunto, o la spiegazione), senza alcuna nota, commento, o premessa — pronto per essere salvato come documento standalone"}`;
+
+        const apiResponsePdf = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": env.ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-6",
+            max_tokens: 4000,
+            messages: [{
+              role: "user",
+              content: [
+                { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdfBase64 } },
+                { type: "text", text: pdfPrompt }
+              ]
+            }]
+          })
+        });
+
+        if (!apiResponsePdf.ok) {
+          const errText = await apiResponsePdf.text();
+          return new Response(JSON.stringify({
+            categoria: "errore",
+            descrizione: `Errore API (${apiResponsePdf.status}): ${errText}`
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const dataPdf = await apiResponsePdf.json();
+        if (dataPdf.error) {
+          return new Response(JSON.stringify({
+            categoria: "errore",
+            descrizione: `Errore API: ${dataPdf.error.message || JSON.stringify(dataPdf.error)}`
+          }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const rawTextPdf = (dataPdf.content || []).filter(b => b.type === "text").map(b => b.text).join("\n");
+        let parsedPdf;
+        try {
+          const cleanedPdf = rawTextPdf.replace(/```json\s*|\s*```/g, "").trim();
+          parsedPdf = JSON.parse(cleanedPdf);
+        } catch (e) {
+          parsedPdf = { categoria: "documento", descrizione: rawTextPdf || "Risposta non interpretabile.", testo_pulito: rawTextPdf || "" };
+        }
+
+        return new Response(JSON.stringify({
+          categoria: parsedPdf.categoria || "documento",
+          descrizione: parsedPdf.descrizione || "",
+          testo_pulito: parsedPdf.testo_pulito || parsedPdf.descrizione || "",
+          nome_probabile: null,
+          nome_scientifico: null
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (!imageBase64 || !mediaType) {
+        return new Response(JSON.stringify({
+          categoria: "errore",
+          descrizione: "Dati immagine mancanti."
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const languageNames = {
+        it: "italiano",
+        en: "inglese",
+        fr: "francese",
+        es: "spagnolo",
+        de: "tedesco",
+        ar: "arabo"
+      };
+      const linguaNome = languageNames[lingua] || "italiano";
+
+      // Costruisci il prompt in base alla modalità
+      let promptText = "";
+      const schemaBase = `Hai a disposizione uno strumento di ricerca web: usalo se noti dettagli specifici (iscrizioni, targhe, stile architettonico distintivo, bandiere, elementi unici) che potrebbero aiutarti a verificare o identificare con più precisione cosa stai vedendo.
+
+Per il campo nome_probabile: forniscilo ogni volta che hai un'ipotesi ragionevole (anche non certa al 100%), perché viene usato per cercare informazioni aggiuntive su Wikipedia. IMPORTANTE: deve essere un termine di ricerca breve e pulito (2-6 parole), il nome proprio del soggetto così come comparirebbe come titolo di una voce Wikipedia (es. "Fort Augustus Locks", "Torre di Pisa", "Ovis aries") — NON una frase descrittiva o una proposizione completa. Metti a null solo se non hai proprio alcuna ipotesi plausibile. IMPORTANTE: nel testo della descrizione, però, sii sempre onesto sul livello di certezza — usa frasi come "si tratta quasi certamente di..." quando sei molto sicuro, oppure "potrebbe trattarsi di..., anche se non è possibile confermarlo con certezza dagli elementi visibili" quando è solo un'ipotesi. Non presentare mai un'ipotesi incerta come un fatto assodato. Quando identifichi il soggetto con buona confidenza, includi anche un breve contesto storico o culturale nella descrizione (epoca, significato, perché è noto).
+
+Rispondi SOLO con un oggetto JSON valido, senza testo prima o dopo, senza markdown, con questa struttura esatta:
+{"categoria": "monumento|natura|animale|pianta|luogo naturale|oggetto|testo|altro", "descrizione": "descrizione dettagliata in ${linguaNome}, con livello di certezza esplicito e contesto storico se identificato", "nome_probabile": "nome specifico, anche solo ipotetico se ragionevole, altrimenti null", "nome_scientifico": "nome scientifico se pertinente (animale/pianta), altrimenti null"}`;
+
+      const contestoPosizione = posizione
+        ? `\n\nContesto aggiuntivo: la foto è stata scattata vicino a questa posizione geografica: "${posizione}". Usa questo indizio per essere più preciso nell'identificazione, se pertinente, ma non inventare dettagli non visibili nella foto.`
+        : "";
+
+      const contestoCorrezione = correzione
+        ? `\n\nIMPORTANTE - l'utente ti ha detto che il soggetto/luogo di questa foto è: "${correzione}". Fidati di questa informazione come corretta (l'utente la conosce meglio di quanto tu possa dedurre dall'immagine). Usa la ricerca web per verificare e arricchire con dettagli storici/culturali su questo soggetto specifico, poi scrivi una descrizione aggiornata e accurata basata su questa identificazione confermata. Metti questo nome (o una forma pulita e concisa di esso) nel campo nome_probabile.`
+        : "";
+
+      if (modalita === "scientifico") {
+        promptText = `Analizza questa foto da un punto di vista naturalistico/scientifico. Se è un animale o una pianta, identifica la specie con il nome comune e il nome scientifico (binomiale latino) se possibile, e includi note su habitat, caratteristiche distintive. ${schemaBase}${contestoPosizione}${contestoCorrezione}`;
+      } else if (modalita === "testo") {
+        const schemaTesto = `Rispondi SOLO con un oggetto JSON valido, senza testo prima o dopo, senza markdown, con questa struttura esatta:
+{"categoria": "testo", "descrizione": "il tuo output completo qui in ${linguaNome}, puoi includere note utili", "testo_pulito": "SOLO il contenuto puro richiesto (il testo letto, la traduzione, il riassunto o la spiegazione), senza premesse o commenti tipo 'ecco il testo' — pronto per essere salvato come documento standalone", "nome_probabile": null, "nome_scientifico": null}`;
+
+        if (azioneTesto === "riassumi") {
+          promptText = `Riassumi in ${linguaNome} il contenuto testuale visibile in questa immagine (documento, cartello, pagina, ecc.), evidenziando i punti principali in modo conciso ma completo. ${schemaTesto}${contestoPosizione}${contestoCorrezione}`;
+        } else if (azioneTesto === "spiega") {
+          promptText = `Leggi il testo visibile in questa immagine e spiegalo in modo chiaro e dettagliato in ${linguaNome}: di cosa si tratta, i punti chiave, e soprattutto — quando pertinente — spiega A COSA SERVONO le cose descritte (es. se è un modulo, spiega a cosa serve compilarlo; se è un macchinario o oggetto tecnico, spiega la sua funzione; se è un documento normativo, spiega il suo scopo pratico). Non limitarti a ripetere il testo, aggiungi contesto utile alla comprensione.
+
+Se il documento è un referto medico, un esame di laboratorio o una prescrizione: spiega in linguaggio semplice e comprensibile cosa significano i termini medici, le sigle e i valori riportati (es. cosa misura un certo parametro, cosa indica genericamente un valore fuori range), come farebbe un medico parlando con un paziente. NON fare diagnosi, NON dare consigli terapeutici personalizzati, e ricorda sempre esplicitamente che per l'interpretazione clinica specifica e le decisioni di cura serve parlare con il proprio medico. Il tuo ruolo è aiutare a capire il documento, non sostituire il parere medico.
+
+${schemaTesto}${contestoPosizione}${contestoCorrezione}`;
+        } else if (azioneTesto === "traduci") {
+          promptText = `Traduci integralmente in ${linguaNome} tutto il testo visibile in questa immagine, mantenendo la struttura originale il più possibile. ${schemaTesto}${contestoPosizione}${contestoCorrezione}`;
+        } else {
+          promptText = `Leggi attentamente tutto il testo visibile in questa immagine (cartelli, insegne, menu, scritte). Riporta il testo originale letto e poi la sua traduzione in ${linguaNome}. ${schemaTesto}${contestoPosizione}${contestoCorrezione}`;
+        }
+      } else if (modalita === "manoscritto") {
+        promptText = `Trascrivi con la massima cura e attenzione il testo manoscritto (scritto a mano) visibile in questa immagine — può trattarsi di una lettera, un appunto, un diario, una ricetta medica o un documento antico. Segui queste regole:
+1. Trascrivi fedelmente parola per parola, mantenendo l'impaginazione originale (a capo, paragrafi) quando possibile.
+2. Se una parola o una frase è di lettura incerta o illeggibile, segnalalo chiaramente scrivendo [parola incerta] o [illeggibile] al posto giusto, senza inventare il contenuto.
+3. Fornisci anche una traduzione in ${linguaNome} SOLO se il testo originale è in una lingua diversa.
+4. Se riconosci indizi sull'epoca, il tipo di documento o il contesto (es. calligrafia antica, carta intestata, data), menzionali brevemente.
+
+Rispondi SOLO con un oggetto JSON valido, senza testo prima o dopo, senza markdown, con questa struttura esatta:
+{"categoria": "manoscritto", "descrizione": "trascrizione completa + eventuale traduzione + note di contesto, tutto ben separato e leggibile, in ${linguaNome} per le parti di commento", "testo_pulito": "SOLO la trascrizione fedele (ed eventuale traduzione se richiesta), SENZA alcuna nota di contesto o commento — pronto per essere salvato come documento standalone", "nome_probabile": null, "nome_scientifico": null}`;
+      } else {
+        promptText = `Descrivi in ${linguaNome} cosa vedi in questa foto in modo dettagliato: se è un monumento, edificio, paesaggio naturale, animale o pianta, identifica cosa può essere con la massima precisione possibile in base agli indizi visivi (architettura, vegetazione, geologia, geografia). ${schemaBase}${contestoPosizione}${contestoCorrezione}`;
+      }
+
+      // Modalità confronto tra due immagini
+      let messageContent;
+      if (modalita === "confronto" && imageBase64_2 && mediaType_2) {
+        messageContent = [
+          { type: "image", source: { type: "base64", media_type: mediaType, data: imageBase64 } },
+          { type: "image", source: { type: "base64", media_type: mediaType_2, data: imageBase64_2 } },
+          {
+            type: "text",
+            text: `Confronta queste due immagini in ${linguaNome}. Descrivi le somiglianze e le differenze principali (soggetto, contesto, dettagli visivi). Rispondi SOLO con un oggetto JSON valido, senza testo prima o dopo: {"categoria": "confronto", "descrizione": "analisi comparativa dettagliata in ${linguaNome}", "nome_probabile": null, "nome_scientifico": null}`
+          }
+        ];
+      } else {
+        messageContent = [
+          { type: "image", source: { type: "base64", media_type: mediaType, data: imageBase64 } },
+          { type: "text", text: promptText }
+        ];
+      }
+
+      const apiResponse = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": env.ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 1500,
+          tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }],
+          messages: [{
+            role: "user",
+            content: messageContent
+          }]
+        })
+      });
+
+      if (!apiResponse.ok) {
+        const errText = await apiResponse.text();
+        return new Response(JSON.stringify({
+          categoria: "errore",
+          descrizione: `Errore API (${apiResponse.status}): ${errText}`
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const data = await apiResponse.json();
+
+      if (data.error) {
+        return new Response(JSON.stringify({
+          categoria: "errore",
+          descrizione: `Errore API: ${data.error.message || JSON.stringify(data.error)}`
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const textBlocks = (data.content || []).filter(b => b.type === "text");
+      const rawText = textBlocks.length ? textBlocks[textBlocks.length - 1].text : "";
+
+      let parsed;
+      try {
+        // Rimuove eventuali blocchi markdown ```json ... ``` se presenti
+        const cleaned = rawText.replace(/```json\s*|\s*```/g, "").trim();
+        parsed = JSON.parse(cleaned);
+      } catch (e) {
+        // Se il parsing fallisce, restituisci comunque il testo grezzo come descrizione
+        parsed = {
+          categoria: "altro",
+          descrizione: rawText || "Risposta non interpretabile.",
+          nome_probabile: null,
+          nome_scientifico: null
         };
-        resolve({ lat: toDecimal(lat, latRef), lon: toDecimal(lon, lonRef) });
+      }
+
+      return new Response(JSON.stringify({
+        categoria: parsed.categoria || "altro",
+        descrizione: parsed.descrizione || "",
+        testo_pulito: parsed.testo_pulito || null,
+        nome_probabile: parsed.nome_probabile || null,
+        nome_scientifico: parsed.nome_scientifico || null
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-    } catch (e) {
-      resolve(null);
-    }
-  });
-}
 
-locBtn.addEventListener('click', async () => {
-  if (locationEnabled) {
-    locationEnabled = false;
-    currentLocation = null;
-    locBtn.textContent = '📍 Posizione dispositivo: off';
-    return;
-  }
-  locBtn.textContent = '📍 Rilevamento…';
-  try {
-    const pos = await new Promise((resolve, reject) =>
-      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 })
-    );
-    const label = await reverseGeocode(pos.coords.latitude, pos.coords.longitude);
-    currentLocation = { lat: pos.coords.latitude, lon: pos.coords.longitude, label };
-    locationEnabled = true;
-    locBtn.textContent = '📍 Posizione dispositivo: on';
-  } catch (err) {
-    locBtn.textContent = '📍 Posizione dispositivo: off';
-    alert('Impossibile ottenere la posizione.');
-  }
-});
-
-// ---------- Standard / scientific / text modes ----------
-cameraInput.addEventListener('change', handleFile);
-libraryInput.addEventListener('change', handleFile);
-
-async function handleFile(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  lastAnalyzedFile = file;
-  lastAnalyzedMode = modeSelect.value;
-  document.getElementById('correctBox').style.display = 'none';
-
-  resultCard.style.display = 'none';
-  preview.src = URL.createObjectURL(file);
-  preview.style.display = 'block';
-  loading.style.display = 'block';
-
-  try {
-    const maxDim = dataSaverMode ? 800 : 1280;
-    const quality = dataSaverMode ? 0.6 : 0.85;
-    const { base64, mediaType } = await resizeAndEncode(file, maxDim, quality);
-    lastResultImageDataUrl = `data:${mediaType};base64,${base64}`;
-
-    // Priorità: posizione GPS salvata nella foto stessa. Se assente, usa quella del dispositivo (se attiva).
-    let locationLabel = null;
-    let locationSource = null;
-    let locationCoords = null;
-    let debugInfo = `tipo file: ${file.type || 'sconosciuto'}, nome: ${file.name || 'sconosciuto'}, dimensione: ${(file.size / 1024 / 1024).toFixed(1)}MB`;
-    try {
-      const exifLoc = await getExifGPS(file);
-      if (exifLoc) {
-        locationLabel = await reverseGeocode(exifLoc.lat, exifLoc.lon);
-        locationSource = 'foto';
-        locationCoords = exifLoc;
-        debugInfo += ` — GPS trovato: ${exifLoc.lat.toFixed(5)}, ${exifLoc.lon.toFixed(5)}`;
-      } else {
-        debugInfo += ` — EXIF letto ma nessun tag GPS presente`;
-      }
-    } catch (e) {
-      debugInfo += ` — errore lettura EXIF: ${e.message}`;
-    }
-    if (!locationLabel && locationEnabled && currentLocation) {
-      locationLabel = currentLocation.label;
-      locationSource = 'dispositivo';
-      locationCoords = { lat: currentLocation.lat, lon: currentLocation.lon };
-    }
-    lastLocationLabel = locationLabel;
-    lastLocationSource = locationSource;
-    lastLocationCoords = locationCoords;
-    lastDebugInfo = debugInfo;
-
-    const result = await analyzeImage(base64, mediaType, modeSelect.value, locationLabel);
-    renderResult(result);
-
-    let wikiInfo = null;
-    if (result.nome_probabile) {
-      wikiInfo = await fetchWikipedia(result.nome_probabile);
-    }
-
-    let thumbDataUrl;
-    try {
-      thumbDataUrl = await resizeDataUrlToThumb(lastResultImageDataUrl, 200, 0.6);
-    } catch (thumbErr) {
-      thumbDataUrl = lastResultImageDataUrl;
-    }
-    saveHistoryEntry({
-      thumb: thumbDataUrl,
-      categoria: result.categoria,
-      descrizione: result.descrizione,
-      nomeScientifico: result.nome_scientifico || null,
-      wikiTitle: wikiInfo?.title || null,
-      wikiLink: wikiInfo?.link || null,
-      data: new Date().toISOString()
-    });
-  } catch (err) {
-    document.getElementById('categoria').textContent = 'errore';
-    document.getElementById('descrizione').textContent = 'Errore: ' + (err && err.message ? err.message : 'sconosciuto');
-    document.getElementById('locTag').style.display = 'none';
-    document.getElementById('nomeScientifico').style.display = 'none';
-    document.getElementById('wikiBox').style.display = 'none';
-    document.getElementById('saveCleanPdfBtn').style.display = 'none';
-    resultCard.style.display = 'block';
-  } finally {
-    loading.style.display = 'none';
-  }
-}
-
-// ---------- Compare mode ----------
-const compareInput1 = document.getElementById('compareInput1');
-const compareInput2 = document.getElementById('compareInput2');
-const previewCompare1 = document.getElementById('previewCompare1');
-const previewCompare2 = document.getElementById('previewCompare2');
-let compareFile1 = null, compareFile2 = null;
-
-compareInput1.addEventListener('change', e => {
-  compareFile1 = e.target.files[0];
-  if (compareFile1) {
-    previewCompare1.src = URL.createObjectURL(compareFile1);
-    previewCompare1.style.display = 'block';
-  }
-});
-compareInput2.addEventListener('change', e => {
-  compareFile2 = e.target.files[0];
-  if (compareFile2) {
-    previewCompare2.src = URL.createObjectURL(compareFile2);
-    previewCompare2.style.display = 'block';
-  }
-});
-
-document.getElementById('runCompareBtn').addEventListener('click', async () => {
-  if (!compareFile1 || !compareFile2) {
-    alert('Scegli entrambe le foto prima di confrontare.');
-    return;
-  }
-  resultCard.style.display = 'none';
-  loading.style.display = 'block';
-  try {
-    const img1 = await resizeAndEncode(compareFile1);
-    const img2 = await resizeAndEncode(compareFile2);
-    const result = await analyzeCompare(img1, img2);
-    renderResult(result);
-  } catch (err) {
-    document.getElementById('categoria').textContent = 'errore';
-    document.getElementById('descrizione').textContent = 'Errore: ' + err.message;
-    resultCard.style.display = 'block';
-  } finally {
-    loading.style.display = 'none';
-  }
-});
-
-// ---------- Batch mode ----------
-const batchInput = document.getElementById('batchInput');
-const batchList = document.getElementById('batchList');
-
-// ---------- Modalità PDF ----------
-const pdfInput = document.getElementById('pdfInput');
-const pdfActionSelect = document.getElementById('pdfActionSelect');
-const pdfFileName = document.getElementById('pdfFileName');
-
-function readFileAsBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => resolve(e.target.result.split(',')[1]);
-    reader.onerror = () => reject(new Error('Errore nella lettura del PDF'));
-    reader.readAsDataURL(file);
-  });
-}
-
-pdfInput.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  if (file.size > 30 * 1024 * 1024) {
-    alert('Il PDF è troppo grande (oltre 30MB). Prova con un file più leggero.');
-    pdfInput.value = '';
-    return;
-  }
-
-  pdfFileName.textContent = `📄 ${file.name} (${(file.size / 1024 / 1024).toFixed(1)}MB) — elaborazione in corso…`;
-  resultCard.style.display = 'none';
-  loading.style.display = 'block';
-  lastResultImageDataUrl = null;
-
-  try {
-    const base64 = await readFileAsBase64(file);
-    const azione = pdfActionSelect.value;
-    const result = await analyzePdf(base64, azione);
-    renderResult(result);
-    document.getElementById('locTag').style.display = 'none';
-    pdfFileName.textContent = `📄 ${file.name} — completato`;
-
-    saveHistoryEntry({
-      thumb: null,
-      categoria: result.categoria || 'documento',
-      descrizione: result.descrizione,
-      nomeScientifico: null,
-      wikiTitle: null,
-      wikiLink: null,
-      data: new Date().toISOString()
-    });
-  } catch (err) {
-    document.getElementById('categoria').textContent = 'errore';
-    document.getElementById('descrizione').textContent = 'Errore: ' + (err && err.message ? err.message : 'sconosciuto');
-    document.getElementById('locTag').style.display = 'none';
-    document.getElementById('nomeScientifico').style.display = 'none';
-    document.getElementById('wikiBox').style.display = 'none';
-    document.getElementById('saveCleanPdfBtn').style.display = 'none';
-    resultCard.style.display = 'block';
-    pdfFileName.textContent = `📄 ${file.name} — errore`;
-  } finally {
-    loading.style.display = 'none';
-  }
-});
-
-async function analyzePdf(base64, azione) {
-  const res = await fetch(WORKER_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      modalita: 'pdf',
-      azionePdf: azione,
-      lingua: langSelect.value,
-      pdfBase64: base64
-    })
-  });
-  if (!res.ok) throw new Error('Richiesta fallita');
-  return res.json();
-}
-
-batchInput.addEventListener('change', async (e) => {
-  const files = Array.from(e.target.files);
-  if (!files.length) return;
-  batchList.innerHTML = '';
-
-  files.forEach((file, i) => {
-    const row = document.createElement('div');
-    row.className = 'batch-item';
-    const thumbUrl = URL.createObjectURL(file);
-    row.innerHTML = `<img src="${thumbUrl}"><div><div class="batch-status" id="batchStatus${i}">In attesa…</div></div>`;
-    batchList.appendChild(row);
-  });
-
-  for (let i = 0; i < files.length; i++) {
-    const statusEl = document.getElementById(`batchStatus${i}`);
-    statusEl.textContent = 'Analisi in corso…';
-    try {
-      const { base64, mediaType } = await resizeAndEncode(files[i]);
-      const imgDataUrl = `data:${mediaType};base64,${base64}`;
-
-      let locationLabel = null;
-      try {
-        const exifLoc = await getExifGPS(files[i]);
-        if (exifLoc) locationLabel = await reverseGeocode(exifLoc.lat, exifLoc.lon);
-      } catch (e) {}
-      if (!locationLabel && locationEnabled && currentLocation) {
-        locationLabel = currentLocation.label;
-      }
-
-      const result = await analyzeImage(base64, mediaType, 'standard', locationLabel);
-      statusEl.textContent = `${result.categoria || 'ok'}: ${(result.descrizione || '').slice(0, 80)}…`;
-
-      let wikiInfo = null;
-      if (result.nome_probabile) {
-        wikiInfo = await fetchWikipedia(result.nome_probabile);
-      }
-      let thumbDataUrl;
-      try {
-        thumbDataUrl = await resizeDataUrlToThumb(imgDataUrl, 200, 0.6);
-      } catch (thumbErr) {
-        thumbDataUrl = imgDataUrl;
-      }
-      await saveHistoryEntry({
-        thumb: thumbDataUrl,
-        categoria: result.categoria,
-        descrizione: result.descrizione,
-        nomeScientifico: result.nome_scientifico || null,
-        wikiTitle: wikiInfo?.title || null,
-        wikiLink: wikiInfo?.link || null,
-        data: new Date().toISOString()
-      });
     } catch (err) {
-      statusEl.textContent = 'Errore: ' + (err && err.message ? err.message : 'sconosciuto');
-    }
-  }
-});
-
-// ---------- Helpers ----------
-async function resizeAndEncode(file, maxDim = 1280, quality = 0.85) {
-  // Metodo moderno ed efficiente in memoria: evita di gonfiare l'immagine intera in base64
-  // prima di poterla ridimensionare. Fondamentale per foto di grandi dimensioni.
-  if (window.createImageBitmap) {
-    try {
-      const bitmap = await createImageBitmap(file);
-      let { width, height } = bitmap;
-      if (width > height && width > maxDim) {
-        height = height * (maxDim / width);
-        width = maxDim;
-      } else if (height > maxDim) {
-        width = width * (maxDim / height);
-        height = maxDim;
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      canvas.getContext('2d').drawImage(bitmap, 0, 0, width, height);
-      if (bitmap.close) bitmap.close();
-      const dataUrl = canvas.toDataURL('image/jpeg', quality);
-      return { base64: dataUrl.split(',')[1], mediaType: 'image/jpeg' };
-    } catch (e) {
-      // Se fallisce, prova con il metodo alternativo qui sotto
-    }
-  }
-
-  // Metodo alternativo (browser meno recenti o se createImageBitmap fallisce)
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const reader = new FileReader();
-    reader.onload = (e) => { img.src = e.target.result; };
-    reader.onerror = () => reject(new Error('Errore nella lettura del file'));
-    img.onload = () => {
-      let { width, height } = img;
-      if (width > height && width > maxDim) {
-        height = height * (maxDim / width);
-        width = maxDim;
-      } else if (height > maxDim) {
-        width = width * (maxDim / height);
-        height = maxDim;
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-      const dataUrl = canvas.toDataURL('image/jpeg', quality);
-      resolve({ base64: dataUrl.split(',')[1], mediaType: 'image/jpeg' });
-    };
-    img.onerror = () => reject(new Error('Immagine troppo grande o non leggibile su questo dispositivo'));
-    reader.readAsDataURL(file);
-  });
-}
-
-function resizeDataUrlToThumb(dataUrl, maxDim = 200, quality = 0.6) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      let { width, height } = img;
-      if (width > height && width > maxDim) {
-        height = height * (maxDim / width);
-        width = maxDim;
-      } else if (height > maxDim) {
-        width = width * (maxDim / height);
-        height = maxDim;
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/jpeg', quality));
-    };
-    img.onerror = () => reject(new Error('Errore nella generazione della miniatura'));
-    img.src = dataUrl;
-  });
-}
-
-async function analyzeImage(base64, mediaType, mode, locationLabel) {
-  const azioneTesto = mode === 'testo' ? document.getElementById('textActionSelect').value : null;
-  const res = await fetch(WORKER_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      imageBase64: base64,
-      mediaType,
-      modalita: mode,
-      azioneTesto: azioneTesto,
-      lingua: langSelect.value,
-      posizione: locationLabel || null
-    })
-  });
-  if (!res.ok) throw new Error('Richiesta fallita');
-  return res.json();
-}
-
-async function analyzeCompare(img1, img2) {
-  const res = await fetch(WORKER_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      modalita: 'confronto',
-      lingua: langSelect.value,
-      imageBase64: img1.base64,
-      mediaType: img1.mediaType,
-      imageBase64_2: img2.base64,
-      mediaType_2: img2.mediaType
-    })
-  });
-  if (!res.ok) throw new Error('Richiesta fallita');
-  return res.json();
-}
-
-function renderResult(result) {
-  document.getElementById('categoria').textContent = result.categoria || 'altro';
-  document.getElementById('descrizione').textContent = result.descrizione || '';
-  document.getElementById('wikiBox').style.display = 'none';
-    document.getElementById('saveCleanPdfBtn').style.display = 'none';
-
-  lastCleanText = result.testo_pulito || null;
-  document.getElementById('saveCleanPdfBtn').style.display = lastCleanText ? 'inline-block' : 'none';
-
-  const sciEl = document.getElementById('nomeScientifico');
-  if (result.nome_scientifico) {
-    sciEl.textContent = result.nome_scientifico;
-    sciEl.style.display = 'block';
-  } else {
-    sciEl.style.display = 'none';
-  }
-
-  const locEl = document.getElementById('locTag');
-  if (lastLocationLabel) {
-    let sourceLabel = '📍 Posizione attuale del telefono';
-    if (lastLocationSource === 'foto') sourceLabel = '📍 Dalla foto';
-    else if (lastLocationSource === 'correzione') sourceLabel = '📍 Da te (corretta)';
-    let html = `${sourceLabel}: ${lastLocationLabel}`;
-    if (lastLocationCoords) {
-      html += ` — <a href="https://www.google.com/maps?q=${lastLocationCoords.lat},${lastLocationCoords.lon}&z=18" target="_blank" style="color:var(--accent);">🗺️ Vedi su Google Maps</a>`;
-    }
-    locEl.innerHTML = html;
-    locEl.style.display = 'block';
-  } else {
-    locEl.textContent = '📍 Nessun GPS trovato in questa foto';
-    locEl.style.display = 'block';
-  }
-
-  const debugEl = document.getElementById('debugTag');
-  if (debugEl) {
-    debugEl.textContent = '🔧 ' + lastDebugInfo;
-    debugEl.style.display = 'block';
-  }
-
-  lastResultText = `${result.categoria || ''}\n${result.descrizione || ''}`;
-  resultCard.style.display = 'block';
-}
-
-let lastAnalyzedFile = null;
-let lastAnalyzedMode = 'standard';
-
-const correctToggleBtn = document.getElementById('correctToggleBtn');
-const correctBox = document.getElementById('correctBox');
-const correctInput = document.getElementById('correctInput');
-const correctSubmitBtn = document.getElementById('correctSubmitBtn');
-
-correctToggleBtn.addEventListener('click', () => {
-  correctBox.style.display = correctBox.style.display === 'none' ? 'block' : 'none';
-});
-
-correctSubmitBtn.addEventListener('click', async () => {
-  const correzione = correctInput.value.trim();
-  if (!correzione) {
-    correctInput.style.borderColor = 'var(--danger)';
-    correctInput.placeholder = 'Scrivi qui il nome prima di rianalizzare';
-    return;
-  }
-  if (!lastAnalyzedFile) {
-    alert('Nessuna foto analizzata di recente da correggere.');
-    return;
-  }
-  correctInput.style.borderColor = '';
-  loading.style.display = 'block';
-  correctBox.style.display = 'none';
-  try {
-    const maxDim = dataSaverMode ? 800 : 1280;
-    const quality = dataSaverMode ? 0.6 : 0.85;
-    const { base64, mediaType } = await resizeAndEncode(lastAnalyzedFile, maxDim, quality);
-    const result = await analyzeImageWithCorrection(base64, mediaType, lastAnalyzedMode, lastLocationLabel, correzione);
-
-    // Prova a geocodificare il nome corretto scritto dall'utente, così la mappa funziona
-    // anche quando la foto non aveva GPS salvato.
-    try {
-      const geoRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(correzione)}&format=json&limit=1`, {
-        headers: { 'Accept-Language': langSelect.value }
+      return new Response(JSON.stringify({
+        categoria: "errore",
+        descrizione: "Errore interno: " + err.message
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-      if (geoRes.ok) {
-        const geoData = await geoRes.json();
-        if (geoData && geoData[0]) {
-          lastLocationCoords = { lat: parseFloat(geoData[0].lat), lon: parseFloat(geoData[0].lon) };
-          lastLocationLabel = geoData[0].display_name || correzione;
-          lastLocationSource = 'correzione';
-        }
-      }
-    } catch (geoErr) {}
-
-    renderResult(result);
-    if (result.nome_probabile) {
-      await fetchWikipedia(result.nome_probabile);
     }
-  } catch (err) {
-    alert('Errore durante la ricorrezione: ' + (err && err.message ? err.message : 'sconosciuto'));
-  } finally {
-    loading.style.display = 'none';
-    correctInput.value = '';
   }
-});
-
-async function analyzeImageWithCorrection(base64, mediaType, mode, locationLabel, correzione) {
-  const res = await fetch(WORKER_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      imageBase64: base64,
-      mediaType,
-      modalita: mode,
-      lingua: langSelect.value,
-      posizione: locationLabel || null,
-      correzione: correzione
-    })
-  });
-  if (!res.ok) throw new Error('Richiesta fallita');
-  return res.json();
-}
-
-copyBtn.addEventListener('click', async () => {
-  try {
-    await navigator.clipboard.writeText(lastResultText);
-    copyBtn.textContent = '✅ Copiato';
-    setTimeout(() => copyBtn.textContent = '📋 Copia', 1500);
-  } catch (err) {
-    alert('Impossibile copiare automaticamente. Testo:\n\n' + lastResultText);
-  }
-});
-
-shareBtn.addEventListener('click', async () => {
-  try {
-    if (navigator.share) {
-      const shareData = { title: 'FotoExplain', text: lastResultText };
-      if (lastResultImageDataUrl && navigator.canShare) {
-        const blob = await (await fetch(lastResultImageDataUrl)).blob();
-        const file = new File([blob], 'foto.jpg', { type: blob.type });
-        if (navigator.canShare({ files: [file] })) {
-          shareData.files = [file];
-        }
-      }
-      await navigator.share(shareData);
-    } else {
-      await navigator.clipboard.writeText(lastResultText);
-      alert('Condivisione non supportata: testo copiato negli appunti.');
-    }
-  } catch (err) {}
-});
-
-document.getElementById('savePdfBtn').addEventListener('click', () => {
-  const categoria = document.getElementById('categoria').textContent || '';
-  const descrizione = document.getElementById('descrizione').textContent || '';
-  const dataOra = new Date().toLocaleString('it-IT');
-
-  document.getElementById('printCategoria').textContent = 'FotoExplain — ' + categoria;
-  document.getElementById('printMeta').textContent = dataOra;
-  document.getElementById('printDescrizione').textContent = descrizione;
-
-  const printImg = document.getElementById('printImg');
-  if (lastResultImageDataUrl) {
-    printImg.src = lastResultImageDataUrl;
-    printImg.style.display = 'block';
-  } else {
-    printImg.style.display = 'none';
-  }
-
-  window.print();
-});
-
-document.getElementById('saveCleanPdfBtn').addEventListener('click', () => {
-  if (!lastCleanText) return;
-
-  // Documento pulito: niente intestazione FotoExplain, niente categoria, niente immagine — solo il testo.
-  document.getElementById('printCategoria').textContent = '';
-  document.getElementById('printMeta').textContent = '';
-  document.getElementById('printDescrizione').textContent = lastCleanText;
-  document.getElementById('printImg').style.display = 'none';
-
-  window.print();
-});
-
-const speakBtn = document.getElementById('speakBtn');
-const voiceLangMap = { it: 'it-IT', en: 'en-US', fr: 'fr-FR', es: 'es-ES', de: 'de-DE', ar: 'ar-SA' };
-let isSpeaking = false;
-
-speakBtn.addEventListener('click', () => {
-  if (!('speechSynthesis' in window)) {
-    alert('Lettura vocale non supportata su questo browser.');
-    return;
-  }
-  if (isSpeaking) {
-    window.speechSynthesis.cancel();
-    isSpeaking = false;
-    speakBtn.textContent = '🔊 Ascolta';
-    return;
-  }
-  const textToSpeak = document.getElementById('descrizione').textContent;
-  if (!textToSpeak) return;
-  const utterance = new SpeechSynthesisUtterance(textToSpeak);
-  utterance.lang = voiceLangMap[langSelect.value] || 'it-IT';
-  utterance.onend = () => {
-    isSpeaking = false;
-    speakBtn.textContent = '🔊 Ascolta';
-  };
-  utterance.onerror = () => {
-    isSpeaking = false;
-    speakBtn.textContent = '🔊 Ascolta';
-  };
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(utterance);
-  isSpeaking = true;
-  speakBtn.textContent = '⏹️ Ferma';
-});
-
-async function fetchWikipedia(nome) {
-  const wikiLangMap = { it: 'it', en: 'en', fr: 'fr', es: 'es', de: 'de', ar: 'ar' };
-  const wikiLang = wikiLangMap[langSelect.value] || 'it';
-
-  const tentativo = async (termine) => {
-    try {
-      const searchUrl = `https://${wikiLang}.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(termine)}&limit=1&format=json&origin=*`;
-      const searchRes = await fetch(searchUrl);
-      const searchData = await searchRes.json();
-      const titolo = searchData[1]?.[0];
-      if (!titolo) return null;
-
-      const summaryUrl = `https://${wikiLang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(titolo)}`;
-      const summaryRes = await fetch(summaryUrl);
-      if (!summaryRes.ok) return null;
-      const summaryData = await summaryRes.json();
-
-      const link = summaryData.content_urls?.desktop?.page || `https://${wikiLang}.wikipedia.org/wiki/${titolo}`;
-
-      document.getElementById('wikiTitle').textContent = summaryData.title || titolo;
-      document.getElementById('wikiExtract').textContent = summaryData.extract || '';
-      document.getElementById('wikiLink').href = link;
-
-      const wikiImg = document.getElementById('wikiImg');
-      if (summaryData.thumbnail?.source) {
-        wikiImg.src = summaryData.thumbnail.source;
-        wikiImg.style.display = 'block';
-      } else {
-        wikiImg.style.display = 'none';
-      }
-
-      document.getElementById('wikiBox').style.display = 'block';
-      return { title: summaryData.title || titolo, link };
-    } catch (err) {
-      return null;
-    }
-  };
-
-  // Primo tentativo: il termine così com'è
-  let risultato = await tentativo(nome);
-  if (risultato) return risultato;
-
-  // Secondo tentativo: rimuove parentesi e si limita alle prime 4 parole
-  const pulito = nome.replace(/\([^)]*\)/g, '').trim().split(/\s+/).slice(0, 4).join(' ');
-  if (pulito && pulito !== nome) {
-    risultato = await tentativo(pulito);
-    if (risultato) return risultato;
-  }
-
-  return null;
-}
-
-// ---------- History ----------
-let historyVisible = false;
-toggleHistoryBtn.addEventListener('click', async () => {
-  historyVisible = !historyVisible;
-  historyList.style.display = historyVisible ? 'block' : 'none';
-  if (historyVisible) {
-    historyItems.innerHTML = '<p class="muted" style="text-align:center;">Caricamento…</p>';
-    fullHistoryCache = await loadHistory();
-    renderHistory(fullHistoryCache);
-  }
-});
-
-historySearch.addEventListener('input', () => {
-  const q = historySearch.value.trim().toLowerCase();
-  if (!q) { renderHistory(fullHistoryCache); return; }
-  const filtered = fullHistoryCache.filter(item =>
-    (item.categoria || '').toLowerCase().includes(q) ||
-    (item.descrizione || '').toLowerCase().includes(q) ||
-    (item.nomeScientifico || '').toLowerCase().includes(q)
-  );
-  renderHistory(filtered);
-});
-
-async function loadHistory() {
-  try {
-    const res = await fetch(`${JSONBIN_URL}/latest`, {
-      headers: { 'X-Master-Key': JSONBIN_KEY }
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.record?.cronologia || [];
-  } catch (err) {
-    return [];
-  }
-}
-
-async function saveFullHistory(cronologia) {
-  await fetch(JSONBIN_URL, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Master-Key': JSONBIN_KEY
-    },
-    body: JSON.stringify({ cronologia })
-  });
-}
-
-async function saveHistoryEntry(entry) {
-  try {
-    const cronologia = await loadHistory();
-    cronologia.unshift(entry);
-    const trimmed = cronologia.slice(0, 50);
-    await saveFullHistory(trimmed);
-  } catch (err) {
-  }
-}
-
-async function deleteHistoryEntry(index) {
-  fullHistoryCache.splice(index, 1);
-  renderHistory(fullHistoryCache);
-  await saveFullHistory(fullHistoryCache);
-}
-
-function renderHistory(cronologia) {
-  if (!cronologia.length) {
-    historyItems.innerHTML = '<p class="muted" style="text-align:center;">Nessuna foto ancora analizzata</p>';
-    return;
-  }
-  historyItems.innerHTML = cronologia.map((item, idx) => {
-    const data = new Date(item.data).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-    const thumbHtml = item.thumb
-      ? `<img src="${item.thumb}" alt="miniatura" class="hist-thumb" data-idx="${idx}" style="cursor:pointer;">`
-      : `<div class="hist-thumb" data-idx="${idx}" style="cursor:pointer; width:60px; height:60px; border-radius:8px; background:#333844; display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0;">📄</div>`;
-    return `
-      <div class="hist-item">
-        ${thumbHtml}
-        <div class="hist-info">
-          <div class="hist-cat">${item.categoria || 'altro'}</div>
-          <div class="hist-desc">${item.descrizione || ''}</div>
-          <div class="hist-date">${data}</div>
-        </div>
-        <button class="hist-del" data-idx="${idx}" title="Elimina">🗑️</button>
-      </div>
-    `;
-  }).join('');
-
-  historyItems.querySelectorAll('.hist-thumb').forEach(el => {
-    el.addEventListener('click', () => {
-      const item = cronologia[parseInt(el.dataset.idx)];
-      const detailImg = document.getElementById('detailImg');
-      if (item.thumb) {
-        detailImg.src = item.thumb;
-        detailImg.style.display = 'block';
-      } else {
-        detailImg.style.display = 'none';
-      }
-      document.getElementById('detailCategoria').textContent = item.categoria || 'altro';
-      document.getElementById('detailDescrizione').textContent = item.descrizione || '';
-      document.getElementById('historyDetailPanel').style.display = 'flex';
-    });
-  });
-
-  historyItems.querySelectorAll('.hist-del').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const realIdx = fullHistoryCache.indexOf(cronologia[parseInt(btn.dataset.idx)]);
-      if (realIdx > -1) deleteHistoryEntry(realIdx);
-    });
-  });
-}
-
-document.getElementById('closeDetailBtn').addEventListener('click', () => {
-  document.getElementById('historyDetailPanel').style.display = 'none';
-});
-
-exportCsvBtn.addEventListener('click', () => {
-  if (!fullHistoryCache.length) { alert('Nessuna voce da esportare.'); return; }
-  const header = 'Data,Categoria,Descrizione,Nome scientifico\n';
-  const rows = fullHistoryCache.map(item => {
-    const clean = s => `"${(s || '').replace(/"/g, '""')}"`;
-    return [item.data, clean(item.categoria), clean(item.descrizione), clean(item.nomeScientifico)].join(',');
-  }).join('\n');
-  const csv = header + rows;
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `fotoexplain_cronologia_${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-});
-
-// ---------- Blocco con password + Face ID / Touch ID ----------
-const PWD_HASH_KEY = 'fe_pwd_hash';
-const LOCK_ENABLED_KEY = 'fe_lock_enabled';
-const WEBAUTHN_ID_KEY = 'fe_webauthn_credential_id';
-
-const lockScreen = document.getElementById('lockScreen');
-const lockSetupView = document.getElementById('lockSetupView');
-const lockUnlockView = document.getElementById('lockUnlockView');
-const settingsPanel = document.getElementById('settingsPanel');
-
-async function sha256Hex(text) {
-  const enc = new TextEncoder().encode(text);
-  const buf = await crypto.subtle.digest('SHA-256', enc);
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-function bufToBase64(buf) {
-  return btoa(String.fromCharCode(...new Uint8Array(buf)));
-}
-function base64ToBuf(b64) {
-  return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-}
-
-function initLockScreen() {
-  const lockEnabled = localStorage.getItem(LOCK_ENABLED_KEY) === '1';
-  if (!lockEnabled) {
-    lockScreen.style.display = 'none';
-    return;
-  }
-  lockScreen.style.display = 'flex';
-  lockSetupView.style.display = 'none';
-  lockUnlockView.style.display = 'block';
-  const hasBiometric = !!localStorage.getItem(WEBAUTHN_ID_KEY);
-  document.getElementById('biometricArea').style.display = hasBiometric ? 'block' : 'none';
-  if (hasBiometric && window.PublicKeyCredential) {
-    // tenta subito lo sblocco biometrico automatico
-    tryBiometricUnlock(true);
-  }
-}
-
-// Se non è mai stata impostata una password, mostra la schermata iniziale la prima volta
-if (localStorage.getItem(PWD_HASH_KEY)) {
-  initLockScreen();
-} else {
-  lockScreen.style.display = 'flex';
-  lockSetupView.style.display = 'block';
-  lockUnlockView.style.display = 'none';
-}
-
-document.getElementById('skipLockBtn').addEventListener('click', () => {
-  localStorage.setItem(LOCK_ENABLED_KEY, '0');
-  lockScreen.style.display = 'none';
-});
-
-document.getElementById('setupSaveBtn').addEventListener('click', async () => {
-  const p1 = document.getElementById('setupPwd1').value;
-  const p2 = document.getElementById('setupPwd2').value;
-  const errEl = document.getElementById('setupError');
-  if (!p1 || p1.length < 4) { errEl.textContent = 'Almeno 4 caratteri.'; return; }
-  if (p1 !== p2) { errEl.textContent = 'Le password non coincidono.'; return; }
-  const hash = await sha256Hex(p1);
-  localStorage.setItem(PWD_HASH_KEY, hash);
-  localStorage.setItem(LOCK_ENABLED_KEY, '1');
-  lockScreen.style.display = 'none';
-});
-
-document.getElementById('unlockBtn').addEventListener('click', async () => {
-  const val = document.getElementById('unlockPwdInput').value;
-  const hash = await sha256Hex(val);
-  const stored = localStorage.getItem(PWD_HASH_KEY);
-  if (hash === stored) {
-    lockScreen.style.display = 'none';
-  } else {
-    document.getElementById('lockError').textContent = 'Password errata.';
-  }
-});
-
-document.getElementById('unlockPwdInput').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') document.getElementById('unlockBtn').click();
-});
-
-async function tryBiometricUnlock(silent) {
-  try {
-    const credId = localStorage.getItem(WEBAUTHN_ID_KEY);
-    if (!credId) return;
-    const challenge = crypto.getRandomValues(new Uint8Array(32));
-    const cred = await navigator.credentials.get({
-      publicKey: {
-        challenge,
-        allowCredentials: [{ id: base64ToBuf(credId), type: 'public-key' }],
-        userVerification: 'required',
-        timeout: 30000
-      }
-    });
-    if (cred) lockScreen.style.display = 'none';
-  } catch (err) {
-    if (!silent) document.getElementById('lockError').textContent = 'Sblocco biometrico non riuscito.';
-  }
-}
-document.getElementById('biometricUnlockBtn').addEventListener('click', () => tryBiometricUnlock(false));
-
-// ---------- Pannello impostazioni ----------
-document.getElementById('openSettingsBtn').addEventListener('click', () => {
-  settingsPanel.style.display = 'flex';
-});
-document.getElementById('closeSettingsBtn').addEventListener('click', () => {
-  settingsPanel.style.display = 'none';
-});
-
-document.getElementById('changePwdBtn').addEventListener('click', async () => {
-  const newPwd = prompt('Nuova password (almeno 4 caratteri):');
-  if (!newPwd || newPwd.length < 4) return;
-  const hash = await sha256Hex(newPwd);
-  localStorage.setItem(PWD_HASH_KEY, hash);
-  localStorage.setItem(LOCK_ENABLED_KEY, '1');
-  alert('Password aggiornata.');
-});
-
-document.getElementById('disableLockBtn').addEventListener('click', () => {
-  if (!confirm('Disattivare il blocco con password?')) return;
-  localStorage.setItem(LOCK_ENABLED_KEY, '0');
-  settingsPanel.style.display = 'none';
-});
-
-document.getElementById('enableBiometricBtn').addEventListener('click', async () => {
-  if (!window.PublicKeyCredential) {
-    alert('Face ID / Touch ID non supportato su questo browser.');
-    return;
-  }
-  try {
-    const challenge = crypto.getRandomValues(new Uint8Array(32));
-    const userId = crypto.getRandomValues(new Uint8Array(16));
-    const cred = await navigator.credentials.create({
-      publicKey: {
-        challenge,
-        rp: { name: 'FotoExplain', id: location.hostname },
-        user: { id: userId, name: 'paolo', displayName: 'Paolo' },
-        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
-        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
-        timeout: 30000,
-        attestation: 'none'
-      }
-    });
-    if (cred) {
-      localStorage.setItem(WEBAUTHN_ID_KEY, bufToBase64(cred.rawId));
-      alert('Face ID / Touch ID abilitato per questo dispositivo.');
-    }
-  } catch (err) {
-    alert('Impossibile abilitare: ' + err.message);
-  }
-});
-</script>
-
-</body>
-</html>
+};
