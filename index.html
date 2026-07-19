@@ -1038,19 +1038,43 @@ document.getElementById('nearbyBtn').addEventListener('click', async () => {
       return;
     }
 
-    listEl.innerHTML = places.map(p => {
+    listEl.innerHTML = places.map((p, idx) => {
       const distKm = (p.dist / 1000).toFixed(1);
-      const wikiUrl = `https://${wikiLang}.wikipedia.org/wiki/${encodeURIComponent(p.title.replace(/ /g, '_'))}`;
-      const mapsUrl = `https://www.google.com/maps?q=${p.lat},${p.lon}&z=17`;
+      const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}`;
       return `
         <div style="background:var(--card); border-radius:10px; padding:10px; margin-bottom:8px;">
-          <div style="font-weight:600; margin-bottom:2px;">${p.title}</div>
+          <div style="font-weight:600; margin-bottom:2px; cursor:pointer; color:var(--accent);" class="nearby-title" data-idx="${idx}">${p.title} ▾</div>
           <div style="font-size:12px; color:var(--muted); margin-bottom:6px;">${distKm} km di distanza</div>
-          <a href="${wikiUrl}" target="_blank" style="color:var(--accent); font-size:13px; margin-right:14px;">📖 Wikipedia</a>
-          <a href="${mapsUrl}" target="_blank" style="color:var(--accent); font-size:13px;">🗺️ Mappa</a>
+          <div class="nearby-history" id="nearbyHistory${idx}" style="display:none; font-size:13px; margin-bottom:8px; line-height:1.4;"></div>
+          <a href="${navUrl}" target="_blank" style="color:var(--accent); font-size:13px;">🧭 Naviga qui con Google Maps</a>
         </div>
       `;
     }).join('');
+
+    listEl.querySelectorAll('.nearby-title').forEach((el, idx) => {
+      el.addEventListener('click', async () => {
+        const historyEl = document.getElementById(`nearbyHistory${idx}`);
+        if (historyEl.style.display === 'block') {
+          historyEl.style.display = 'none';
+          return;
+        }
+        if (historyEl.dataset.loaded) {
+          historyEl.style.display = 'block';
+          return;
+        }
+        historyEl.style.display = 'block';
+        historyEl.textContent = 'Caricamento…';
+        try {
+          const summaryUrl = `https://${wikiLang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(places[idx].title.replace(/ /g, '_'))}`;
+          const summaryRes = await fetch(summaryUrl);
+          const summaryData = await summaryRes.json();
+          historyEl.textContent = summaryData.extract || 'Nessuna informazione disponibile.';
+          historyEl.dataset.loaded = '1';
+        } catch (e) {
+          historyEl.textContent = 'Errore nel caricamento della storia.';
+        }
+      });
+    });
   } catch (err) {
     listEl.innerHTML = '<p class="muted">Errore nella ricerca dei luoghi vicini.</p>';
   }
