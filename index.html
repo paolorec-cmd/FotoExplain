@@ -1234,8 +1234,15 @@ async function loadOverpassCategory(query, radius, emptyMsg, errMsg) {
     const overpassQuery = `[out:json][timeout:25];(${query});out center 25;`;
     const res = await fetch('https://overpass-api.de/api/interpreter', {
       method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: 'data=' + encodeURIComponent(overpassQuery)
     });
+
+    if (!res.ok) {
+      listEl.innerHTML = `<p class="muted">${errMsg} (codice ${res.status})</p>`;
+      return;
+    }
+
     const data = await res.json();
     const elements = (data.elements || []).filter(e => e.tags && e.tags.name);
 
@@ -1262,7 +1269,7 @@ async function loadOverpassCategory(query, radius, emptyMsg, errMsg) {
       `;
     }).join('');
   } catch (err) {
-    listEl.innerHTML = `<p class="muted">${errMsg}</p>`;
+    listEl.innerHTML = `<p class="muted">${errMsg} (${err && err.message ? err.message : 'errore sconosciuto'})</p>`;
   }
 }
 
