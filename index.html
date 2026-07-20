@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FotoExplain</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/exif-js/2.3.0/exif.js" crossorigin="anonymous"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous"></script>
 <style>
   :root {
     --bg: #0f1115;
@@ -331,6 +333,7 @@
     <option value="confronto">⚖️ Confronta due foto</option>
     <option value="batch">📚 Analisi multipla (batch)</option>
     <option value="pdf">📄 Leggi/spiega/traduci PDF</option>
+    <option value="mappa">🗺️ Mappa, GPX e meteo</option>
   </select>
   <select id="langSelect">
     <option value="it">🇮🇹 Italiano</option>
@@ -393,6 +396,24 @@
   <p id="pdfFileName" class="muted" style="margin-top:8px;"></p>
 </div>
 
+<div class="upload-box" id="mappaUpload" style="display:none; text-align:left;">
+  <p class="muted" style="text-align:center;">Meteo, tracciato GPX e mappa</p>
+
+  <div style="text-align:center; margin-bottom:14px;">
+    <button class="btn secondary" id="meteoBtn">🌤️ Meteo qui</button>
+  </div>
+  <div id="meteoResult" style="display:none; background:var(--card); border-radius:10px; padding:14px; margin-bottom:14px;"></div>
+
+  <div style="text-align:center; margin-bottom:10px;">
+    <label class="btn secondary" for="gpxInput">📂 Carica traccia GPX</label>
+    <input type="file" id="gpxInput" accept=".gpx">
+  </div>
+  <p id="gpxFileName" class="muted" style="text-align:center;"></p>
+
+  <div id="mapContainer" style="display:none; height:340px; border-radius:12px; overflow:hidden; margin-top:10px;"></div>
+  <p class="muted" style="font-size:11px; margin-top:8px; text-align:center;">Le zone di mappa che visualizzi mentre sei online restano salvate nella cache del telefono e sono consultabili di nuovo anche offline. Non è possibile scaricare in anticipo una zona mai vista.</p>
+</div>
+
 <div style="text-align:center; margin-bottom: 16px;">
   <button class="btn secondary" id="toggleHistoryBtn">📜 Cronologia</button>
 </div>
@@ -418,7 +439,9 @@
   <span class="tag" id="categoria"></span>
   <div class="loc-tag" id="locTag" style="display:none;"></div>
   <div id="nearbyBtnWrap" style="display:none; margin-bottom:12px;">
-    <button class="btn small secondary" id="nearbyBtn">🏛️ Luoghi vicini da visitare</button>
+    <button class="btn small secondary" id="nearbyBtnMonumenti">🏛️ Monumenti</button>
+    <button class="btn small secondary" id="nearbyBtnCibo">🍽️ Bar e ristoranti</button>
+    <button class="btn small secondary" id="nearbyBtnNatura">⛰️ Rifugi e natura</button>
     <div id="nearbyList" style="margin-top:10px;"></div>
   </div>
   <div class="loc-tag" id="debugTag" style="display:none; font-size:11px; opacity:0.6;"></div>
@@ -488,6 +511,7 @@ const uploadBoxes = {
   confronto: document.getElementById('confrontoUpload'),
   batch: document.getElementById('batchUpload'),
   pdf: document.getElementById('pdfUpload'),
+  mappa: document.getElementById('mappaUpload'),
 };
 modeSelect.addEventListener('change', () => {
   Object.values(uploadBoxes).forEach(el => el.style.display = 'none');
@@ -518,6 +542,10 @@ modeSelect.addEventListener('change', () => {
 
   document.getElementById('pdfInput').value = '';
   document.getElementById('pdfFileName').textContent = '';
+
+  if (modeSelect.value === 'mappa' && typeof leafletMap !== 'undefined' && leafletMap) {
+    setTimeout(() => leafletMap.invalidateSize(), 200);
+  }
 });
 
 const dataSaverBtn = document.getElementById('dataSaverBtn');
@@ -1015,10 +1043,123 @@ function renderResult(result) {
   resultCard.style.display = 'block';
 }
 
+// ---------- Modalità Mappa / GPX / Meteo ----------
+let leafletMap = null;
+let gpxLayer = null;
+
+document.getElementById('meteoBtn').addEventListener('click', async () => {
+  const resultEl = document.getElementById('meteoResult');
+  resultEl.style.display = 'block';
+  resultEl.textContent = 'Rilevamento posizione…';
+
+  try {
+    const pos = await new Promise((resolve, reject) =>
+      navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 10000 })
+    );
+    const lat = pos.coords.latitude;
+    const lon = pos.coords.longitude;
+
+    resultEl.textContent = 'Caricamento meteo…';
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&forecast_days=3`;
+    const res = await fetch(url);
+    const data = await res.json();
+
+    const weatherIcons = {
+      0: '☀️', 1: '🌤️', 2: '⛅', 3: '☁️', 45: '🌫️', 48: '🌫️',
+      51: '🌦️', 53: '🌦️', 55: '🌧️', 61: '🌧️', 63: '🌧️', 65: '⛈️',
+      71: '🌨️', 73: '🌨️', 75: '❄️', 80: '🌦️', 81: '🌧️', 82: '⛈️',
+      95: '⛈️', 96: '⛈️', 99: '⛈️'
+    };
+    const icon = weatherIcons[data.current.weather_code] || '🌡️';
+
+    let html = `<div style="font-size:15px; margin-bottom:10px;">${icon} <b>${data.current.temperature_2m}°C</b> — umidità ${data.current.relative_humidity_2m}%, vento ${data.current.wind_speed_10m} km/h</div>`;
+    html += '<div style="display:flex; gap:10px; font-size:13px;">';
+    for (let i = 0; i < 3; i++) {
+      const giorno = new Date(data.daily.time[i]).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric' });
+      const ic = weatherIcons[data.daily.weather_code[i]] || '🌡️';
+      html += `<div style="text-align:center; background:var(--bg); border-radius:8px; padding:8px; flex:1;">${giorno}<br>${ic}<br>${Math.round(data.daily.temperature_2m_min[i])}° / ${Math.round(data.daily.temperature_2m_max[i])}°</div>`;
+    }
+    html += '</div>';
+    resultEl.innerHTML = html;
+
+    initMap(lat, lon);
+  } catch (err) {
+    resultEl.textContent = 'Impossibile ottenere il meteo: ' + (err && err.message ? err.message : 'errore sconosciuto');
+  }
+});
+
+function initMap(lat, lon) {
+  const mapContainer = document.getElementById('mapContainer');
+  mapContainer.style.display = 'block';
+
+  if (leafletMap) {
+    leafletMap.setView([lat, lon], 13);
+    return;
+  }
+
+  leafletMap = L.map('mapContainer').setView([lat, lon], 13);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap',
+    maxZoom: 18
+  }).addTo(leafletMap);
+
+  L.marker([lat, lon]).addTo(leafletMap).bindPopup('Sei qui').openPopup();
+}
+
+document.getElementById('gpxInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  document.getElementById('gpxFileName').textContent = `📂 ${file.name} — caricamento…`;
+
+  try {
+    const text = await file.text();
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(text, 'application/xml');
+    const trkpts = Array.from(xml.querySelectorAll('trkpt'));
+
+    if (!trkpts.length) {
+      document.getElementById('gpxFileName').textContent = `📂 ${file.name} — nessun tracciato trovato nel file`;
+      return;
+    }
+
+    const coords = trkpts.map(pt => [parseFloat(pt.getAttribute('lat')), parseFloat(pt.getAttribute('lon'))]);
+    const center = coords[Math.floor(coords.length / 2)];
+
+    if (!leafletMap) {
+      initMap(center[0], center[1]);
+    }
+
+    if (gpxLayer) leafletMap.removeLayer(gpxLayer);
+    gpxLayer = L.polyline(coords, { color: '#4f9dff', weight: 4 }).addTo(leafletMap);
+    leafletMap.fitBounds(gpxLayer.getBounds());
+
+    L.marker(coords[0]).addTo(leafletMap).bindPopup('Partenza');
+    L.marker(coords[coords.length - 1]).addTo(leafletMap).bindPopup('Arrivo');
+
+    // Calcola lunghezza approssimativa del percorso
+    let totalKm = 0;
+    for (let i = 1; i < coords.length; i++) {
+      totalKm += haversineKm(coords[i-1][0], coords[i-1][1], coords[i][0], coords[i][1]);
+    }
+
+    document.getElementById('gpxFileName').textContent = `📂 ${file.name} — ${totalKm.toFixed(1)} km, ${trkpts.length} punti`;
+  } catch (err) {
+    document.getElementById('gpxFileName').textContent = `📂 ${file.name} — errore: ` + (err && err.message ? err.message : 'sconosciuto');
+  }
+});
+
 let lastAnalyzedFile = null;
 
-document.getElementById('nearbyBtn').addEventListener('click', async () => {
-  if (!lastLocationCoords) return;
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) ** 2 + Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLon/2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+async function loadMonumenti() {
   const listEl = document.getElementById('nearbyList');
   listEl.innerHTML = '<p class="muted">Ricerca in corso…</p>';
 
@@ -1032,50 +1173,116 @@ document.getElementById('nearbyBtn').addEventListener('click', async () => {
     const places = data.query?.geosearch || [];
 
     if (!places.length) {
-      listEl.innerHTML = '<p class="muted">Nessun luogo di interesse trovato nelle vicinanze su Wikipedia.</p>';
+      listEl.innerHTML = '<p class="muted">Nessun monumento trovato nelle vicinanze su Wikipedia.</p>';
       return;
     }
+
+    // Recupera in parallelo miniatura + estratto per ciascun luogo
+    const summaries = await Promise.all(places.map(async (p) => {
+      try {
+        const summaryUrl = `https://${wikiLang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(p.title.replace(/ /g, '_'))}`;
+        const summaryRes = await fetch(summaryUrl);
+        return await summaryRes.json();
+      } catch (e) {
+        return null;
+      }
+    }));
 
     listEl.innerHTML = places.map((p, idx) => {
       const distKm = (p.dist / 1000).toFixed(1);
       const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lon}`;
+      const wikiUrl = `https://${wikiLang}.wikipedia.org/wiki/${encodeURIComponent(p.title.replace(/ /g, '_'))}`;
+      const thumb = summaries[idx]?.thumbnail?.source;
+      const thumbHtml = thumb ? `<img src="${thumb}" style="width:100%; max-height:160px; object-fit:cover; border-radius:8px; margin-bottom:8px;">` : '';
       return `
         <div style="background:var(--card); border-radius:10px; padding:10px; margin-bottom:8px;">
-          <div style="font-weight:600; margin-bottom:2px; cursor:pointer; color:var(--accent);" class="nearby-title" data-idx="${idx}">${p.title} ▾</div>
-          <div style="font-size:12px; color:var(--muted); margin-bottom:6px;">${distKm} km di distanza</div>
+          ${thumbHtml}
+          <div style="font-weight:600; margin-bottom:2px;">${p.title}</div>
+          <div style="font-size:12px; color:var(--muted); margin-bottom:8px;">${distKm} km di distanza</div>
           <div class="nearby-history" id="nearbyHistory${idx}" style="display:none; font-size:13px; margin-bottom:8px; line-height:1.4;"></div>
-          <a href="${navUrl}" target="_blank" style="color:var(--accent); font-size:13px;">🧭 Naviga qui con Google Maps</a>
+          <div style="display:flex; flex-wrap:wrap; gap:6px;">
+            <button class="btn small secondary nearby-brief" data-idx="${idx}" style="margin:0;">📖 Breve descrizione</button>
+            <a href="${wikiUrl}" target="_blank" class="btn small secondary" style="margin:0; text-decoration:none; display:inline-block;">🔗 Wikipedia completo</a>
+            <a href="${navUrl}" target="_blank" class="btn small secondary" style="margin:0; text-decoration:none; display:inline-block;">🧭 Naviga</a>
+          </div>
         </div>
       `;
     }).join('');
 
-    listEl.querySelectorAll('.nearby-title').forEach((el, idx) => {
-      el.addEventListener('click', async () => {
+    listEl.querySelectorAll('.nearby-brief').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.idx);
         const historyEl = document.getElementById(`nearbyHistory${idx}`);
         if (historyEl.style.display === 'block') {
           historyEl.style.display = 'none';
           return;
         }
-        if (historyEl.dataset.loaded) {
-          historyEl.style.display = 'block';
-          return;
-        }
         historyEl.style.display = 'block';
-        historyEl.textContent = 'Caricamento…';
-        try {
-          const summaryUrl = `https://${wikiLang}.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(places[idx].title.replace(/ /g, '_'))}`;
-          const summaryRes = await fetch(summaryUrl);
-          const summaryData = await summaryRes.json();
-          historyEl.textContent = summaryData.extract || 'Nessuna informazione disponibile.';
-          historyEl.dataset.loaded = '1';
-        } catch (e) {
-          historyEl.textContent = 'Errore nel caricamento della storia.';
-        }
+        historyEl.textContent = summaries[idx]?.extract || 'Nessuna informazione disponibile.';
       });
     });
   } catch (err) {
-    listEl.innerHTML = '<p class="muted">Errore nella ricerca dei luoghi vicini.</p>';
+    listEl.innerHTML = '<p class="muted">Errore nella ricerca dei monumenti vicini.</p>';
   }
+}
+
+async function loadOverpassCategory(query, radius, emptyMsg, errMsg) {
+  const listEl = document.getElementById('nearbyList');
+  listEl.innerHTML = '<p class="muted">Ricerca in corso…</p>';
+
+  try {
+    const overpassQuery = `[out:json][timeout:25];(${query});out center 25;`;
+    const res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: 'data=' + encodeURIComponent(overpassQuery)
+    });
+    const data = await res.json();
+    const elements = (data.elements || []).filter(e => e.tags && e.tags.name);
+
+    if (!elements.length) {
+      listEl.innerHTML = `<p class="muted">${emptyMsg}</p>`;
+      return;
+    }
+
+    const withDist = elements.map(e => {
+      const lat = e.lat || e.center?.lat;
+      const lon = e.lon || e.center?.lon;
+      return { ...e, distKm: haversineKm(lastLocationCoords.lat, lastLocationCoords.lon, lat, lon), lat, lon };
+    }).sort((a, b) => a.distKm - b.distKm).slice(0, 15);
+
+    listEl.innerHTML = withDist.map(e => {
+      const navUrl = `https://www.google.com/maps/dir/?api=1&destination=${e.lat},${e.lon}`;
+      const tipo = e.tags.amenity || e.tags.tourism || e.tags.natural || '';
+      return `
+        <div style="background:var(--card); border-radius:10px; padding:10px; margin-bottom:8px;">
+          <div style="font-weight:600; margin-bottom:2px;">${e.tags.name}</div>
+          <div style="font-size:12px; color:var(--muted); margin-bottom:8px; text-transform:capitalize;">${tipo.replace(/_/g,' ')} — ${e.distKm.toFixed(1)} km</div>
+          <a href="${navUrl}" target="_blank" class="btn small secondary" style="margin:0; text-decoration:none; display:inline-block;">🧭 Naviga</a>
+        </div>
+      `;
+    }).join('');
+  } catch (err) {
+    listEl.innerHTML = `<p class="muted">${errMsg}</p>`;
+  }
+}
+
+document.getElementById('nearbyBtnMonumenti').addEventListener('click', () => {
+  if (!lastLocationCoords) return;
+  loadMonumenti();
+});
+
+document.getElementById('nearbyBtnCibo').addEventListener('click', () => {
+  if (!lastLocationCoords) return;
+  const { lat, lon } = lastLocationCoords;
+  const query = `node["amenity"~"restaurant|bar|cafe|pub"](around:2000,${lat},${lon});`;
+  loadOverpassCategory(query, 2000, 'Nessun bar o ristorante trovato nel raggio di 2km.', 'Errore nella ricerca di bar e ristoranti.');
+});
+
+document.getElementById('nearbyBtnNatura').addEventListener('click', () => {
+  if (!lastLocationCoords) return;
+  const { lat, lon } = lastLocationCoords;
+  const query = `node["tourism"~"alpine_hut|wilderness_hut|viewpoint"](around:6000,${lat},${lon});node["amenity"="drinking_water"](around:2000,${lat},${lon});node["natural"="peak"](around:6000,${lat},${lon});`;
+  loadOverpassCategory(query, 6000, 'Nessun rifugio, fontana o punto naturalistico trovato nelle vicinanze.', 'Errore nella ricerca di luoghi naturalistici.');
 });
 let lastAnalyzedMode = 'standard';
 
