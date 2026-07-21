@@ -276,6 +276,10 @@
   window.addEventListener('unhandledrejection', (e) => {
     showJsError('Promise non gestita: ' + (e.reason && e.reason.message ? e.reason.message : JSON.stringify(e.reason)));
   });
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
 </script>
 
 <!-- Schermo di blocco -->
@@ -411,6 +415,10 @@
   <p id="gpxFileName" class="muted" style="text-align:center;"></p>
 
   <div id="mapContainer" style="display:none; height:340px; border-radius:12px; overflow:hidden; margin-top:10px;"></div>
+  <div id="downloadAreaWrap" style="display:none; text-align:center; margin-top:10px;">
+    <button class="btn secondary" id="downloadAreaBtn">📥 Scarica quest'area per uso offline</button>
+    <p id="downloadAreaStatus" class="muted" style="font-size:12px; margin-top:6px;"></p>
+  </div>
   <p class="muted" style="font-size:11px; margin-top:8px; text-align:center;">Le zone di mappa che visualizzi mentre sei online restano salvate nella cache del telefono e sono consultabili di nuovo anche offline. Non è possibile scaricare in anticipo una zona mai vista.</p>
 </div>
 
@@ -1060,7 +1068,7 @@ document.getElementById('meteoBtn').addEventListener('click', async () => {
     const lon = pos.coords.longitude;
 
     resultEl.textContent = 'Caricamento meteo…';
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&forecast_days=3`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code&hourly=temperature_2m,weather_code,precipitation_probability&daily=temperature_2m_max,temperature_2m_min,weather_code&timezone=auto&forecast_days=3`;
     const res = await fetch(url);
     const data = await res.json();
 
@@ -1073,6 +1081,25 @@ document.getElementById('meteoBtn').addEventListener('click', async () => {
     const icon = weatherIcons[data.current.weather_code] || '🌡️';
 
     let html = `<div style="font-size:15px; margin-bottom:10px;">${icon} <b>${data.current.temperature_2m}°C</b> — umidità ${data.current.relative_humidity_2m}%, vento ${data.current.wind_speed_10m} km/h</div>`;
+
+    // Meteo ora per ora (prossime 24 ore da adesso)
+    const nowIso = new Date().toISOString().slice(0, 13);
+    let startIdx = data.hourly.time.findIndex(t => t.startsWith(nowIso));
+    if (startIdx === -1) startIdx = 0;
+    html += '<div style="display:flex; gap:8px; overflow-x:auto; padding-bottom:8px; margin-bottom:12px;">';
+    for (let i = startIdx; i < startIdx + 24 && i < data.hourly.time.length; i++) {
+      const ora = new Date(data.hourly.time[i]).toLocaleTimeString('it-IT', { hour: '2-digit' });
+      const ic = weatherIcons[data.hourly.weather_code[i]] || '🌡️';
+      const pioggia = data.hourly.precipitation_probability[i];
+      html += `<div style="text-align:center; background:var(--bg); border-radius:8px; padding:8px; min-width:56px; flex-shrink:0;">
+        <div style="font-size:11px; color:var(--muted);">${ora}</div>
+        <div style="font-size:18px;">${ic}</div>
+        <div style="font-size:12px;">${Math.round(data.hourly.temperature_2m[i])}°</div>
+        <div style="font-size:10px; color:var(--accent);">${pioggia}%</div>
+      </div>`;
+    }
+    html += '</div>';
+
     html += '<div style="display:flex; gap:10px; font-size:13px;">';
     for (let i = 0; i < 3; i++) {
       const giorno = new Date(data.daily.time[i]).toLocaleDateString('it-IT', { weekday: 'short', day: 'numeric' });
@@ -1091,6 +1118,7 @@ document.getElementById('meteoBtn').addEventListener('click', async () => {
 function initMap(lat, lon) {
   const mapContainer = document.getElementById('mapContainer');
   mapContainer.style.display = 'block';
+  document.getElementById('downloadAreaWrap').style.display = 'block';
 
   if (leafletMap) {
     leafletMap.setView([lat, lon], 13);
@@ -1105,6 +1133,61 @@ function initMap(lat, lon) {
 
   L.marker([lat, lon]).addTo(leafletMap).bindPopup('Sei qui').openPopup();
 }
+
+function lonToTileX(lon, zoom) {
+  return Math.floor((lon + 180) / 360 * Math.pow(2, zoom));
+}
+function latToTileY(lat, zoom) {
+  const rad = lat * Math.PI / 180;
+  return Math.floor((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2 * Math.pow(2, zoom));
+}
+
+document.getElementById('downloadAreaBtn').addEventListener('click', async () => {
+  if (!leafletMap) return;
+  const statusEl = document.getElementById('downloadAreaStatus');
+
+  if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
+    statusEl.textContent = 'Il download offline richiede qualche secondo di attivazione dopo il primo caricamento: ricarica la pagina una volta e riprova.';
+    return;
+  }
+
+  const bounds = leafletMap.getBounds();
+  const baseZoom = leafletMap.getZoom();
+  const zooms = [baseZoom, Math.min(baseZoom + 1, 17), Math.min(baseZoom + 2, 18)];
+  const subdomains = ['a', 'b', 'c'];
+
+  let urls = [];
+  zooms.forEach(z => {
+    const xMin = lonToTileX(bounds.getWest(), z);
+    const xMax = lonToTileX(bounds.getEast(), z);
+    const yMin = latToTileY(bounds.getNorth(), z);
+    const yMax = latToTileY(bounds.getSouth(), z);
+    for (let x = xMin; x <= xMax; x++) {
+      for (let y = yMin; y <= yMax; y++) {
+        const s = subdomains[(x + y) % 3];
+        urls.push(`https://${s}.tile.openstreetmap.org/${z}/${x}/${y}.png`);
+      }
+    }
+  });
+
+  if (urls.length > 400) {
+    statusEl.textContent = `L'area è troppo estesa (${urls.length} tasselli). Aumenta lo zoom su una zona più piccola e riprova.`;
+    return;
+  }
+
+  statusEl.textContent = `Download in corso: 0 / ${urls.length}…`;
+  let done = 0;
+  const batchSize = 6;
+
+  for (let i = 0; i < urls.length; i += batchSize) {
+    const batch = urls.slice(i, i + batchSize);
+    await Promise.all(batch.map(u => fetch(u).catch(() => null)));
+    done += batch.length;
+    statusEl.textContent = `Download in corso: ${Math.min(done, urls.length)} / ${urls.length}…`;
+  }
+
+  statusEl.textContent = `✅ Area salvata per uso offline (${urls.length} tasselli, 3 livelli di zoom).`;
+});
 
 document.getElementById('gpxInput').addEventListener('change', async (e) => {
   const file = e.target.files[0];
